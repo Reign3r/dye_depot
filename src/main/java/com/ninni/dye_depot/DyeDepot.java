@@ -3,20 +3,27 @@ package com.ninni.dye_depot;
 import com.google.common.reflect.Reflection;
 import com.ninni.dye_depot.registry.*;
 import net.fabricmc.api.ModInitializer;
+import net.minecraft.core.Registry;
 import net.minecraft.core.dispenser.ShulkerBoxDispenseBehavior;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.block.DispenserBlock;
 
 public class DyeDepot implements ModInitializer {
     public static final String MOD_ID = "dye_depot";
 
-    public static ResourceLocation modLoc(String path) {
-        return ResourceLocation.fromNamespaceAndPath(MOD_ID, path);
+    public static Identifier modLoc(String path) {
+        return Identifier.fromNamespaceAndPath(MOD_ID, path);
+    }
+
+    public static <T> ResourceKey<T> key(ResourceKey<Registry<T>> registry, String path) {
+        return ResourceKey.create(registry, modLoc(path));
     }
 
     @Override
     public void onInitialize() {
         DDMigration.addAliases();
+        DDResourceConditions.registerFallbacks();
         DDFlammables.register();
 
         DDVanillaIntegration.commonInit();

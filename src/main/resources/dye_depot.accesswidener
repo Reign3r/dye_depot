@@ -1,6 +1,20 @@
-accessWidener v2 named
+classTweaker v2 official
 
-accessible class net/minecraft/world/item/CreativeModeTab$ItemDisplayBuilder
-accessible class net/minecraft/client/gui/MapRenderer$MapInstance
-accessible method net/minecraft/data/loot/EntityLootSubProvider createSheepTable (Lnet/minecraft/world/level/ItemLike;)Lnet/minecraft/world/level/storage/loot/LootTable$Builder;
-accessible method net/minecraft/world/entity/ai/village/poi/PoiTypes registerBlockStates	(Lnet/minecraft/core/Holder;Ljava/util/Set;)V
+accessible method net/minecraft/core/cauldron/CauldronInteraction$Dispatcher put	(Lnet/minecraft/world/item/Item;Lnet/minecraft/core/cauldron/CauldronInteraction;)V
+
+extend-enum net/minecraft/world/item/DyeColor MAROON
+extend-enum net/minecraft/world/item/DyeColor ROSE
+extend-enum net/minecraft/world/item/DyeColor CORAL
+extend-enum net/minecraft/world/item/DyeColor INDIGO
+extend-enum net/minecraft/world/item/DyeColor NAVY
+extend-enum net/minecraft/world/item/DyeColor SLATE
+extend-enum net/minecraft/world/item/DyeColor OLIVE
+extend-enum net/minecraft/world/item/DyeColor AMBER
+extend-enum net/minecraft/world/item/DyeColor BEIGE
+extend-enum net/minecraft/world/item/DyeColor TEAL
+extend-enum net/minecraft/world/item/DyeColor MINT
+extend-enum net/minecraft/world/item/DyeColor AQUA
+extend-enum net/minecraft/world/item/DyeColor VERDANT
+extend-enum net/minecraft/world/item/DyeColor FOREST
+extend-enum net/minecraft/world/item/DyeColor GINGER
+extend-enum net/minecraft/world/item/DyeColor TAN

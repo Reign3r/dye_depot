@@ -1,11 +1,8 @@
 {
   "type": "minecraft:crafting_shaped",
-  "category": "misc",
   "group": "carpet",
   "key": {
-    "#": {
-      "item": "dye_depot:slate_wool"
-    }
+    "#": "dye_depot:slate_wool"
   },
   "pattern": [
     "##"

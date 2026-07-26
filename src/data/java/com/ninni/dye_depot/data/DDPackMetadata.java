@@ -1,21 +1,20 @@
 package com.ninni.dye_depot.data;
 
-import java.util.Optional;
 import net.minecraft.DetectedVersion;
 import net.minecraft.data.PackOutput;
 import net.minecraft.data.metadata.PackMetadataGenerator;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.metadata.pack.PackMetadataSection;
+import net.minecraft.util.InclusiveRange;
 
 public class DDPackMetadata extends PackMetadataGenerator {
 
     public DDPackMetadata(PackOutput output, Component description) {
         super(output);
-        add(PackMetadataSection.TYPE, new PackMetadataSection(
+        add(PackMetadataSection.CLIENT_TYPE, new PackMetadataSection(
                 description,
-                DetectedVersion.BUILT_IN.getPackVersion(PackType.CLIENT_RESOURCES),
-                Optional.empty()
+                new InclusiveRange<>(DetectedVersion.BUILT_IN.packVersion(PackType.CLIENT_RESOURCES))
         ));
     }
 

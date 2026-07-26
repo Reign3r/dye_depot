@@ -2,7 +2,6 @@
   "type": "minecraft:block",
   "pools": [
     {
-      "bonus_rolls": 0.0,
       "conditions": [
         {
           "condition": "minecraft:survives_explosion"
@@ -17,8 +16,9 @@
               "include": [
                 "minecraft:custom_name",
                 "minecraft:item_name",
-                "minecraft:hide_additional_tooltip",
-                "minecraft:banner_patterns"
+                "minecraft:tooltip_display",
+                "minecraft:banner_patterns",
+                "minecraft:rarity"
               ],
               "source": "block_entity"
             }

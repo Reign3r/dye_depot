@@ -1,11 +1,8 @@
 {
   "type": "minecraft:crafting_shaped",
-  "category": "misc",
   "group": "carpet",
   "key": {
-    "#": {
-      "item": "dye_depot:ginger_wool"
-    }
+    "#": "dye_depot:ginger_wool"
   },
   "pattern": [
     "##"

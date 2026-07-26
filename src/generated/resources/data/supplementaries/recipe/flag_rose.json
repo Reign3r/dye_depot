@@ -1,26 +1,22 @@
 {
   "fabric:load_conditions": [
     {
-      "condition": "supplementaries:flag",
-      "flag": "flag"
-    },
-    {
       "condition": "fabric:all_mods_loaded",
       "values": [
         "supplementaries"
       ]
+    },
+    {
+      "condition": "supplementaries:flag",
+      "flag": "flag"
     }
   ],
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "group": "flag",
   "key": {
-    "#": {
-      "item": "dye_depot:rose_wool"
-    },
-    "|": {
-      "item": "minecraft:stick"
-    }
+    "#": "dye_depot:rose_wool",
+    "|": "minecraft:stick"
   },
   "pattern": [
     "###",
@@ -28,7 +24,6 @@
     "|  "
   ],
   "result": {
-    "count": 1,
     "id": "supplementaries:flag_rose"
   }
 }

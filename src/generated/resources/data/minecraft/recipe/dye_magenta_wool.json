@@ -1,17 +1,11 @@
 {
   "type": "minecraft:crafting_shapeless",
-  "category": "misc",
   "group": "wool",
   "ingredients": [
-    {
-      "tag": "minecraft:wool"
-    },
-    {
-      "item": "minecraft:magenta_dye"
-    }
+    "#minecraft:wool",
+    "minecraft:magenta_dye"
   ],
   "result": {
-    "count": 1,
     "id": "minecraft:magenta_wool"
   }
 }

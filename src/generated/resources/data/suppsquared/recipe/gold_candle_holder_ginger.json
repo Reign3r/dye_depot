@@ -1,33 +1,28 @@
 {
   "fabric:load_conditions": [
     {
-      "condition": "supplementaries:flag",
-      "flag": "candle_holder"
-    },
-    {
       "condition": "fabric:all_mods_loaded",
       "values": [
         "suppsquared"
       ]
+    },
+    {
+      "condition": "supplementaries:flag",
+      "flag": "candle_holder"
     }
   ],
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "group": "gold_candle_holder",
   "key": {
-    "C": {
-      "item": "dye_depot:ginger_candle"
-    },
-    "N": {
-      "item": "minecraft:gold_ingot"
-    }
+    "C": "dye_depot:ginger_candle",
+    "N": "minecraft:gold_ingot"
   },
   "pattern": [
     "C",
     "N"
   ],
   "result": {
-    "count": 1,
     "id": "suppsquared:gold_candle_holder_ginger"
   }
 }

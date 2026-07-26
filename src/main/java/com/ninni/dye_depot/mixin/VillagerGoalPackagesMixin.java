@@ -15,8 +15,8 @@ public class VillagerGoalPackagesMixin {
 
     @WrapOperation(
             method = {
-                    "method_43969(Lnet/minecraft/core/Holder;)Z",
-                    "method_43971(Lnet/minecraft/core/Holder;)Z",
+                    "lambda$getCorePackage$1",
+                    "lambda$getRestPackage$0",
             },
             at = @At(value = "INVOKE", target = "Lnet/minecraft/core/Holder;is(Lnet/minecraft/resources/ResourceKey;)Z")
     )

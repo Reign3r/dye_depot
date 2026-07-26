@@ -1,0 +1,9 @@
+{
+  "parent": "minecraft:block/template_bed_foot",
+  "textures": {
+    "east": "dye_depot:block/slate_bed_foot_east",
+    "south": "dye_depot:block/slate_bed_foot_south",
+    "up": "dye_depot:block/slate_bed_foot_up",
+    "west": "dye_depot:block/slate_bed_foot_west"
+  }
+}

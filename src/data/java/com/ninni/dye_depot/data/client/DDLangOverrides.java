@@ -4,7 +4,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
-import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
+import net.fabricmc.fabric.api.datagen.v1.FabricPackOutput;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.world.item.DyeColor;
 
@@ -15,7 +15,7 @@ public class DDLangOverrides extends DDLangProvider {
             DyeColor.LIGHT_GRAY, "Ash"
     );
 
-    public DDLangOverrides(FabricDataOutput output, CompletableFuture<HolderLookup.Provider> lookup) {
+    public DDLangOverrides(FabricPackOutput output, CompletableFuture<HolderLookup.Provider> lookup) {
         super(output, lookup);
     }
 

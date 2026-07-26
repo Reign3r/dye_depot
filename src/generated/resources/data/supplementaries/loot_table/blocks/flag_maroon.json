@@ -1,20 +1,19 @@
 {
   "fabric:load_conditions": [
     {
-      "condition": "supplementaries:flag",
-      "flag": "flag"
-    },
-    {
       "condition": "fabric:all_mods_loaded",
       "values": [
         "supplementaries"
       ]
+    },
+    {
+      "condition": "supplementaries:flag",
+      "flag": "flag"
     }
   ],
   "type": "minecraft:block",
   "pools": [
     {
-      "bonus_rolls": 0.0,
       "entries": [
         {
           "type": "minecraft:item",
@@ -24,7 +23,8 @@
               "include": [
                 "minecraft:custom_name",
                 "minecraft:item_name",
-                "minecraft:hide_additional_tooltip",
+                "minecraft:tooltip_display",
+                "minecraft:rarity",
                 "minecraft:banner_patterns"
               ],
               "source": "block_entity"
@@ -40,5 +40,6 @@
       ],
       "rolls": 1.0
     }
-  ]
+  ],
+  "random_sequence": "supplementaries:blocks/flag_maroon"
 }

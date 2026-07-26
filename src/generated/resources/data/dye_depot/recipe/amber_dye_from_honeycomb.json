@@ -1,11 +1,8 @@
 {
   "type": "minecraft:crafting_shapeless",
-  "category": "misc",
   "group": "amber_dye",
   "ingredients": [
-    {
-      "item": "minecraft:honeycomb"
-    }
+    "minecraft:honeycomb"
   ],
   "result": {
     "count": 2,

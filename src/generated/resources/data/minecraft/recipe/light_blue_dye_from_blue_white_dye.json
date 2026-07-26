@@ -1,21 +1,14 @@
 {
   "fabric:load_conditions": [
     {
-      "condition": "fabric:not",
-      "value": {
-        "condition": "fabric:true"
-      }
+      "condition": "fabric:false"
     }
   ],
   "type": "minecraft:crafting_shapeless",
-  "category": "misc",
   "ingredients": [
-    {
-      "item": "minecraft:debug_stick"
-    }
+    "minecraft:debug_stick"
   ],
   "result": {
-    "count": 1,
     "id": "minecraft:debug_stick"
   }
 }

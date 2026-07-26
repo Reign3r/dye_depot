@@ -1,17 +1,11 @@
 {
   "type": "minecraft:crafting_shapeless",
-  "category": "misc",
   "group": "bed",
   "ingredients": [
-    {
-      "tag": "minecraft:beds"
-    },
-    {
-      "item": "minecraft:green_dye"
-    }
+    "#minecraft:beds",
+    "minecraft:green_dye"
   ],
   "result": {
-    "count": 1,
     "id": "minecraft:green_bed"
   }
 }

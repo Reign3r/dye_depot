@@ -1,28 +1,21 @@
 package com.ninni.dye_depot.data.client;
 
-import com.ninni.dye_depot.DyeDepot;
 import com.ninni.dye_depot.registry.DDItems;
-import io.github.fabricators_of_create.porting_lib.data.ExistingFileHelper;
-import io.github.fabricators_of_create.porting_lib.models.generators.ItemModelProvider;
-import java.util.concurrent.CompletableFuture;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.data.PackOutput;
+import net.minecraft.client.data.models.ItemModelGenerators;
+import net.minecraft.client.data.models.model.ModelTemplates;
 
-public class DDItemModels extends ItemModelProvider {
+/**
+ * Item-model portion of the single Fabric model provider.
+ */
+public final class DDItemModels {
 
-    private final CompletableFuture<HolderLookup.Provider> lookup;
+    private final ItemModelGenerators generator;
 
-    public DDItemModels(PackOutput output, CompletableFuture<HolderLookup.Provider> lookup, ExistingFileHelper fileHelper) {
-        super(output, DyeDepot.MOD_ID, fileHelper);
-        this.lookup = lookup;
+    public DDItemModels(ItemModelGenerators generator) {
+        this.generator = generator;
     }
 
-    @Override
-    protected void registerModels() {
-        // No longer needed, will be kept here for potential future purposes
-        var lookup = this.lookup.join();
-
-        DDItems.DYES.values().forEach(this::basicItem);
+    public void registerModels() {
+        DDItems.DYES.values().forEach(item -> generator.generateFlatItem(item, ModelTemplates.FLAT_ITEM));
     }
-
 }

@@ -3,11 +3,10 @@ package com.ninni.dye_depot.registry;
 import com.ninni.dye_depot.DyeDepot;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.BuiltInRegistries;
+import net.fabricmc.fabric.api.object.builder.v1.world.poi.PoiHelper;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.ai.village.poi.PoiType;
-import net.minecraft.world.entity.ai.village.poi.PoiTypes;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -23,13 +22,8 @@ public class DDPoiTypes {
 
     private static ResourceKey<PoiType> register(String name, Stream<BlockState> possibleStates) {
         var possibleStatesSet = possibleStates.collect(Collectors.toSet());
-        var holder = Registry.registerForHolder(
-                BuiltInRegistries.POINT_OF_INTEREST_TYPE,
-                DyeDepot.modLoc(name),
-                new PoiType(possibleStatesSet, 1, 1)
-        );
-        PoiTypes.registerBlockStates(holder, possibleStatesSet);
-        return holder.key();
+        PoiHelper.register(DyeDepot.modLoc(name), 1, 1, possibleStatesSet);
+        return DyeDepot.key(Registries.POINT_OF_INTEREST_TYPE, name);
     }
 
 }

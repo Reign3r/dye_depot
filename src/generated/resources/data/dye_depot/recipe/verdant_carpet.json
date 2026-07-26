@@ -1,11 +1,8 @@
 {
   "type": "minecraft:crafting_shaped",
-  "category": "misc",
   "group": "carpet",
   "key": {
-    "#": {
-      "item": "dye_depot:verdant_wool"
-    }
+    "#": "dye_depot:verdant_wool"
   },
   "pattern": [
     "##"

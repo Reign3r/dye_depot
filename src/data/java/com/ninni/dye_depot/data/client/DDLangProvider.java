@@ -7,13 +7,13 @@ import com.ninni.dye_depot.registry.DyedHolders;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.stream.Stream;
-import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
+import net.fabricmc.fabric.api.datagen.v1.FabricPackOutput;
 import net.fabricmc.fabric.api.datagen.v1.provider.FabricLanguageProvider;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.ItemLike;
@@ -21,7 +21,7 @@ import net.minecraft.world.level.block.Block;
 
 public abstract class DDLangProvider extends FabricLanguageProvider {
 
-    protected DDLangProvider(FabricDataOutput output, CompletableFuture<HolderLookup.Provider> lookup) {
+    protected DDLangProvider(FabricPackOutput output, CompletableFuture<HolderLookup.Provider> lookup) {
         super(output, lookup);
     }
 
@@ -103,11 +103,11 @@ public abstract class DDLangProvider extends FabricLanguageProvider {
         dyed(builder, filterAndMerge(DDBlocks.WOOL, blockLookup), "Wool");
         dyed(builder, filter(DDBlocks.DYE_BASKETS), "Dye Basket");
 
-        dyed(builder, supplementariesHolders(blockLookup, "present"), "Present");
-        dyed(builder, supplementariesHolders(blockLookup, "trapped_present"), "Trapped Present");
-        dyed(builder, supplementariesHolders(blockLookup, "flag"), "Flag");
-        dyed(builder, supplementariesHolders(blockLookup, "candle_holder"), "Candle Holder");
-        dyed(builder, supplementariesSquaredHolders(blockLookup, "gold_candle_holder"), it -> "Gold " + it + " Candle Holder");
+        dyedCompat(builder, ModCompat.SUPPLEMENTARIES, "present", "Present");
+        dyedCompat(builder, ModCompat.SUPPLEMENTARIES, "trapped_present", "Trapped Present");
+        dyedCompat(builder, ModCompat.SUPPLEMENTARIES, "flag", "Flag");
+        dyedCompat(builder, ModCompat.SUPPLEMENTARIES, "candle_holder", "Candle Holder");
+        dyedCompat(builder, ModCompat.SUPPLEMENTARIES_SQUARED, "gold_candle_holder", it -> "Gold " + it + " Candle Holder");
 
         translateAdditional(builder);
     }
@@ -118,14 +118,6 @@ public abstract class DDLangProvider extends FabricLanguageProvider {
     protected abstract Stream<DyeColor> colors(String group);
 
     protected abstract String translate(DyeColor dye);
-
-    private <R> DyedHolders<R, R> supplementariesHolders(HolderLookup.RegistryLookup<R> registry, String name) {
-        return ModCompat.supplementariesHolders(registry, name, colors(name));
-    }
-
-    private <R> DyedHolders<R, R> supplementariesSquaredHolders(HolderLookup.RegistryLookup<R> registry, String name) {
-        return ModCompat.supplementariesSquaredHolders(registry, name, colors(name));
-    }
 
     private <T extends R, R> DyedHolders<T, R> filterAndMerge(DyedHolders<T, R> dyed, HolderLookup.RegistryLookup<R> registry) {
         return filter(dyed.mergeVanilla(registry));
@@ -146,6 +138,17 @@ public abstract class DDLangProvider extends FabricLanguageProvider {
         );
     }
 
+    private void dyedCompat(TranslationBuilder builder, String namespace, String name, String suffix) {
+        dyedCompat(builder, namespace, name, color -> color + " " + suffix);
+    }
+
+    private void dyedCompat(TranslationBuilder builder, String namespace, String name, Function<String, String> translation) {
+        colors(name).forEach(color -> builder.add(
+                "block." + namespace + "." + name + "_" + color.getSerializedName(),
+                translation.apply(translate(color))
+        ));
+    }
+
     protected void tag(TranslationBuilder builder, TagKey<?> tag, String translation) {
         builder.add(tag, translation);
     }
@@ -162,7 +165,7 @@ public abstract class DDLangProvider extends FabricLanguageProvider {
     }
 
     private <T> TagKey<T> loaderTag(ResourceKey<Registry<T>> registry, String path) {
-        return TagKey.create(registry, ResourceLocation.fromNamespaceAndPath("c", path));
+        return TagKey.create(registry, Identifier.fromNamespaceAndPath("c", path));
     }
 
 }

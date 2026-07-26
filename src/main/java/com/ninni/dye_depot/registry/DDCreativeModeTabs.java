@@ -3,22 +3,22 @@ package com.ninni.dye_depot.registry;
 import static com.ninni.dye_depot.registry.DDItems.*;
 import static net.minecraft.world.item.Items.*;
 
-import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroupEntries;
-import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
+import net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents;
+import net.fabricmc.fabric.api.creativetab.v1.FabricCreativeModeTabOutput;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.ItemLike;
 
 public class DDCreativeModeTabs {
     static {
-        ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.INGREDIENTS).register(entries -> {
+        CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.INGREDIENTS).register(entries -> {
             addDyed(entries, DYES, "dye");
         });
 
-        ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.COLORED_BLOCKS).register(entries -> {
-            entries.addBefore(WHITE_WOOL,
+        CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.COLORED_BLOCKS).register(entries -> {
+            entries.insertBefore(WOOL.pick(DyeColor.WHITE),
                     DDBlocks.DYE_BASKETS.getOrThrow(DyeColor.WHITE),
                     DDBlocks.DYE_BASKETS.getOrThrow(DyeColor.LIGHT_GRAY),
                     DDBlocks.DYE_BASKETS.getOrThrow(DyeColor.GRAY),
@@ -75,7 +75,7 @@ public class DDCreativeModeTabs {
         });
 
 
-        ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.FUNCTIONAL_BLOCKS).register(entries -> {
+        CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.FUNCTIONAL_BLOCKS).register(entries -> {
             addDyed(entries, DDBlocks.SHULKER_BOXES, "shulker_box");
 
             addDyed(entries, DDBlocks.BEDS, "bed");
@@ -86,23 +86,23 @@ public class DDCreativeModeTabs {
         });
     }
 
-    private static void addDyed(FabricItemGroupEntries entries, DyedHolders<?, ? extends ItemLike> values, String baseName) {
-        addDyed(entries, values, DyedHolders.fromRegistry(BuiltInRegistries.ITEM.asLookup(), DyedHolders.vanillaColors(), ResourceLocation.withDefaultNamespace(baseName)));
+    private static void addDyed(FabricCreativeModeTabOutput entries, DyedHolders<?, ? extends ItemLike> values, String baseName) {
+        addDyed(entries, values, DyedHolders.fromRegistry(BuiltInRegistries.ITEM, DyedHolders.vanillaColors(), Identifier.withDefaultNamespace(baseName)));
     }
 
-    private static void addDyed(FabricItemGroupEntries entries, DyedHolders<?, ? extends ItemLike> values, DyedHolders<?, ? extends ItemLike> reference) {
-        entries.addBefore(reference.getOrThrow(DyeColor.ORANGE), values.getOrThrow(DDDyes.GINGER.get()));
-        entries.addAfter(reference.getOrThrow(DyeColor.ORANGE), values.getOrThrow(DDDyes.TAN.get()));
-        entries.addBefore(reference.getOrThrow(DyeColor.YELLOW), values.getOrThrow(DDDyes.BEIGE.get()));
-        entries.addAfter(reference.getOrThrow(DyeColor.YELLOW), values.getOrThrow(DDDyes.AMBER.get()), values.getOrThrow(DDDyes.OLIVE.get()));
-        entries.addBefore(reference.getOrThrow(DyeColor.GREEN), values.getOrThrow(DDDyes.FOREST.get()));
-        entries.addAfter(reference.getOrThrow(DyeColor.GREEN), values.getOrThrow(DDDyes.VERDANT.get()));
-        entries.addBefore(reference.getOrThrow(DyeColor.RED), values.getOrThrow(DDDyes.MAROON.get()), values.getOrThrow(DDDyes.ROSE.get()));
-        entries.addAfter(reference.getOrThrow(DyeColor.RED), values.getOrThrow(DDDyes.CORAL.get()));
-        entries.addBefore(reference.getOrThrow(DyeColor.CYAN), values.getOrThrow(DDDyes.TEAL.get()));
-        entries.addAfter(reference.getOrThrow(DyeColor.CYAN), values.getOrThrow(DDDyes.MINT.get()), values.getOrThrow(DDDyes.AQUA.get()));
-        entries.addAfter(reference.getOrThrow(DyeColor.BLUE), values.getOrThrow(DDDyes.SLATE.get()), values.getOrThrow(DDDyes.NAVY.get()));
-        entries.addBefore(reference.getOrThrow(DyeColor.PURPLE), values.getOrThrow(DDDyes.INDIGO.get()));
+    private static void addDyed(FabricCreativeModeTabOutput entries, DyedHolders<?, ? extends ItemLike> values, DyedHolders<?, ? extends ItemLike> reference) {
+        entries.insertBefore(reference.getOrThrow(DyeColor.ORANGE), values.getOrThrow(DDDyes.GINGER.get()));
+        entries.insertAfter(reference.getOrThrow(DyeColor.ORANGE), values.getOrThrow(DDDyes.TAN.get()));
+        entries.insertBefore(reference.getOrThrow(DyeColor.YELLOW), values.getOrThrow(DDDyes.BEIGE.get()));
+        entries.insertAfter(reference.getOrThrow(DyeColor.YELLOW), values.getOrThrow(DDDyes.AMBER.get()), values.getOrThrow(DDDyes.OLIVE.get()));
+        entries.insertBefore(reference.getOrThrow(DyeColor.GREEN), values.getOrThrow(DDDyes.FOREST.get()));
+        entries.insertAfter(reference.getOrThrow(DyeColor.GREEN), values.getOrThrow(DDDyes.VERDANT.get()));
+        entries.insertBefore(reference.getOrThrow(DyeColor.RED), values.getOrThrow(DDDyes.MAROON.get()), values.getOrThrow(DDDyes.ROSE.get()));
+        entries.insertAfter(reference.getOrThrow(DyeColor.RED), values.getOrThrow(DDDyes.CORAL.get()));
+        entries.insertBefore(reference.getOrThrow(DyeColor.CYAN), values.getOrThrow(DDDyes.TEAL.get()));
+        entries.insertAfter(reference.getOrThrow(DyeColor.CYAN), values.getOrThrow(DDDyes.MINT.get()), values.getOrThrow(DDDyes.AQUA.get()));
+        entries.insertAfter(reference.getOrThrow(DyeColor.BLUE), values.getOrThrow(DDDyes.SLATE.get()), values.getOrThrow(DDDyes.NAVY.get()));
+        entries.insertBefore(reference.getOrThrow(DyeColor.PURPLE), values.getOrThrow(DDDyes.INDIGO.get()));
     }
 
 }

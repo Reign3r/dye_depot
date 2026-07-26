@@ -1,11 +1,8 @@
 {
   "type": "minecraft:crafting_shapeless",
-  "category": "misc",
   "group": "green_dye",
   "ingredients": [
-    {
-      "item": "dye_depot:green_dye_basket"
-    }
+    "dye_depot:green_dye_basket"
   ],
   "result": {
     "count": 9,

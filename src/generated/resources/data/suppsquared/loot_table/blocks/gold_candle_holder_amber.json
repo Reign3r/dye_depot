@@ -1,26 +1,24 @@
 {
   "fabric:load_conditions": [
     {
-      "condition": "supplementaries:flag",
-      "flag": "candle_holder"
-    },
-    {
       "condition": "fabric:all_mods_loaded",
       "values": [
         "suppsquared"
       ]
+    },
+    {
+      "condition": "supplementaries:flag",
+      "flag": "candle_holder"
     }
   ],
   "type": "minecraft:block",
   "pools": [
     {
-      "bonus_rolls": 0.0,
       "entries": [
         {
           "type": "minecraft:item",
           "functions": [
             {
-              "add": false,
               "conditions": [
                 {
                   "block": "suppsquared:gold_candle_holder_amber",
@@ -34,7 +32,6 @@
               "function": "minecraft:set_count"
             },
             {
-              "add": false,
               "conditions": [
                 {
                   "block": "suppsquared:gold_candle_holder_amber",
@@ -48,7 +45,6 @@
               "function": "minecraft:set_count"
             },
             {
-              "add": false,
               "conditions": [
                 {
                   "block": "suppsquared:gold_candle_holder_amber",
@@ -70,5 +66,6 @@
       ],
       "rolls": 1.0
     }
-  ]
+  ],
+  "random_sequence": "suppsquared:blocks/gold_candle_holder_amber"
 }

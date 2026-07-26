@@ -1,33 +1,28 @@
 {
   "fabric:load_conditions": [
     {
-      "condition": "supplementaries:flag",
-      "flag": "candle_holder"
-    },
-    {
       "condition": "fabric:all_mods_loaded",
       "values": [
         "supplementaries"
       ]
+    },
+    {
+      "condition": "supplementaries:flag",
+      "flag": "candle_holder"
     }
   ],
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "group": "candle_holder",
   "key": {
-    "C": {
-      "item": "dye_depot:amber_candle"
-    },
-    "N": {
-      "item": "minecraft:iron_ingot"
-    }
+    "C": "dye_depot:amber_candle",
+    "N": "minecraft:iron_ingot"
   },
   "pattern": [
     "NCN",
     " N "
   ],
   "result": {
-    "count": 1,
     "id": "supplementaries:candle_holder_amber"
   }
 }

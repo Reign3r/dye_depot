@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.Test
+
 plugins {
     id("com.possible-triangle.fabric")
 }
@@ -9,6 +11,16 @@ fabric {
 
         existing("supplementaries")
         existing("suppsquared")
+    }
+}
+
+fabricApi {
+    configureTests {
+        createSourceSet.set(true)
+        modId.set("dye_depot_gametest")
+        enableGameTests.set(true)
+        enableClientGameTests.set(true)
+        eula.set(true)
     }
 }
 
@@ -29,16 +41,20 @@ repositories {
 }
 
 dependencies {
-    modCompileOnly(libs.jei.common.api)
-    modRuntimeOnly(libs.jei)
+    // No 26.2 builds of these optional development/compatibility mods are available yet.
+    // Their data and resource compatibility remains bundled in this mod.
+    add("testImplementation", "net.fabricmc:fabric-loader-junit:${property("fabric_loader_version")}")
+}
 
-    modImplementation(pack.modrinth.moonlight)
-    modImplementation(pack.modrinth.supplementaries)
-    modImplementation(pack.modrinth.supplementaries.squared)
+tasks.withType<Test>().configureEach {
+    // The loader helper disables standard tests by default; this project has
+    // loader-aware JUnit regression tests that are part of the parity gate.
+    setOnlyIf { true }
+    useJUnitPlatform()
+}
 
-    // for data generation
-    modImplementation(libs.porting.lib.models)
-    modImplementation(libs.multikulti.datagen)
+tasks.named("compileTestJava") {
+    setOnlyIf { true }
 }
 
 val (version, type) = mod.version.get().split("-")

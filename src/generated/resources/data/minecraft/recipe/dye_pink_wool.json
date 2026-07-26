@@ -1,17 +1,11 @@
 {
   "type": "minecraft:crafting_shapeless",
-  "category": "misc",
   "group": "wool",
   "ingredients": [
-    {
-      "tag": "minecraft:wool"
-    },
-    {
-      "item": "minecraft:pink_dye"
-    }
+    "#minecraft:wool",
+    "minecraft:pink_dye"
   ],
   "result": {
-    "count": 1,
     "id": "minecraft:pink_wool"
   }
 }

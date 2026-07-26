@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.At;
 public class NearestBedSensorMixin {
 
     @WrapOperation(
-            method = "method_43977(Lnet/minecraft/core/Holder;)Z",
+            method = "lambda$doTick$1",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/core/Holder;is(Lnet/minecraft/resources/ResourceKey;)Z")
     )
     private static boolean isHomePoi(Holder<PoiType> instance, ResourceKey<PoiType> key, Operation<Boolean> original) {

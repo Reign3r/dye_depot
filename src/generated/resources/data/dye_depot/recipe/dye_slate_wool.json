@@ -1,17 +1,11 @@
 {
   "type": "minecraft:crafting_shapeless",
-  "category": "misc",
   "group": "wool",
   "ingredients": [
-    {
-      "tag": "minecraft:wool"
-    },
-    {
-      "item": "dye_depot:slate_dye"
-    }
+    "#minecraft:wool",
+    "dye_depot:slate_dye"
   ],
   "result": {
-    "count": 1,
     "id": "dye_depot:slate_wool"
   }
 }

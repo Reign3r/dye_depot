@@ -1,14 +1,14 @@
 {
   "fabric:load_conditions": [
     {
-      "condition": "supplementaries:flag",
-      "flag": "flag"
-    },
-    {
       "condition": "fabric:all_mods_loaded",
       "values": [
         "supplementaries"
       ]
+    },
+    {
+      "condition": "supplementaries:flag",
+      "flag": "flag"
     }
   ],
   "parent": "minecraft:recipes/root",

@@ -1,12 +1,8 @@
 {
   "type": "minecraft:smelting",
-  "category": "misc",
-  "cookingtime": 200,
   "experience": 0.1,
   "group": "ginger_dye",
-  "ingredient": {
-    "item": "minecraft:pumpkin"
-  },
+  "ingredient": "minecraft:pumpkin",
   "result": {
     "id": "dye_depot:ginger_dye"
   }

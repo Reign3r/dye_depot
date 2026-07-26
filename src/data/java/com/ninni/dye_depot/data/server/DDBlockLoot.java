@@ -1,35 +1,23 @@
 package com.ninni.dye_depot.data.server;
 
-import static com.ninni.dye_depot.data.ModCompat.withSupplementariesFlag;
-
-import com.ninni.dye_depot.data.ModCompat;
 import com.ninni.dye_depot.registry.DDBlocks;
 import java.util.concurrent.CompletableFuture;
-import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
-import net.fabricmc.fabric.api.datagen.v1.provider.FabricBlockLootTableProvider;
+import net.fabricmc.fabric.api.datagen.v1.FabricPackOutput;
+import net.fabricmc.fabric.api.datagen.v1.provider.FabricBlockLootSubProvider;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.properties.BedPart;
-import net.minecraft.world.level.storage.loot.LootPool;
-import net.minecraft.world.level.storage.loot.LootTable;
-import net.minecraft.world.level.storage.loot.entries.LootItem;
-import net.minecraft.world.level.storage.loot.entries.LootPoolEntryContainer;
-import net.minecraft.world.level.storage.loot.functions.CopyComponentsFunction;
 
-public class DDBlockLoot extends FabricBlockLootTableProvider {
+public class DDBlockLoot extends FabricBlockLootSubProvider {
 
-    public DDBlockLoot(FabricDataOutput output, CompletableFuture<HolderLookup.Provider> lookup) {
+    public DDBlockLoot(FabricPackOutput output, CompletableFuture<HolderLookup.Provider> lookup) {
         super(output, lookup);
     }
 
     @Override
     public void generate() {
-        var blockLookup = registries.lookupOrThrow(Registries.BLOCK);
-
         DDBlocks.BANNERS.values().forEach(this::dropBanner);
         DDBlocks.BEDS.values().forEach(this::dropBed);
         DDBlocks.CANDLES.values().forEach(this::dropCandle);
@@ -44,13 +32,6 @@ public class DDBlockLoot extends FabricBlockLootTableProvider {
         DDBlocks.STAINED_GLASS_PANES.values().forEach(this::dropWhenSilkTouch);
         DDBlocks.TERRACOTTA.values().forEach(this::dropSelf);
         DDBlocks.WOOL.values().forEach(this::dropSelf);
-
-        ModCompat.supplementariesHolders(blockLookup, "flag").values()
-                .forEach(it -> add(it, createFlagDrops(it)));
-        ModCompat.supplementariesHolders(blockLookup, "candle_holder").values()
-                .forEach(it -> add(it, withSupplementariesFlag(createCandleDrops(it), ModCompat.SUPPLEMENTARIES, "candle_holder")));
-        ModCompat.supplementariesSquaredHolders(blockLookup, "gold_candle_holder").values()
-                .forEach(it -> add(it, withSupplementariesFlag(createCandleDrops(it), ModCompat.SUPPLEMENTARIES_SQUARED, "candle_holder")));
     }
 
     private void dropBanner(Block block) {
@@ -71,24 +52,6 @@ public class DDBlockLoot extends FabricBlockLootTableProvider {
 
     private void dropShulkerBox(Block block) {
         add(block, createShulkerBoxDrop(block));
-    }
-
-    private LootTable.Builder createTable(Block block, LootPoolEntryContainer.Builder<?> entry) {
-        return LootTable.lootTable().withPool(
-                applyExplosionDecay(block, LootPool.lootPool().add(entry))
-        );
-    }
-
-    private LootTable.Builder createFlagDrops(Block block) {
-        var entry = LootItem.lootTableItem(block)
-                .apply(CopyComponentsFunction.copyComponents(CopyComponentsFunction.Source.BLOCK_ENTITY)
-                        .include(DataComponents.CUSTOM_NAME)
-                        .include(DataComponents.ITEM_NAME)
-                        .include(DataComponents.HIDE_ADDITIONAL_TOOLTIP)
-                        .include(DataComponents.BANNER_PATTERNS)
-                );
-
-        return withSupplementariesFlag(createTable(block, entry), ModCompat.SUPPLEMENTARIES, "flag");
     }
 
 }

@@ -7,32 +7,26 @@ import com.ninni.dye_depot.registry.DDTags;
 import com.ninni.dye_depot.registry.DyedHolders;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
-import net.fabricmc.fabric.api.datagen.v1.FabricDataOutput;
-import net.fabricmc.fabric.api.datagen.v1.provider.FabricTagProvider;
-import net.mehvahdjukaar.supplementaries.reg.ModTags;
+import net.fabricmc.fabric.api.datagen.v1.FabricPackOutput;
+import net.fabricmc.fabric.api.datagen.v1.provider.FabricTagsProvider;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ItemLike;
 
-public class DDItemTags extends FabricTagProvider.ItemTagProvider {
+public class DDItemTags extends FabricTagsProvider.ItemTagsProvider {
 
-    private final CompletableFuture<HolderLookup.Provider> lookup;
-
-    public DDItemTags(FabricDataOutput output, CompletableFuture<HolderLookup.Provider> lookup, BlockTagProvider blockTags) {
+    public DDItemTags(FabricPackOutput output, CompletableFuture<HolderLookup.Provider> lookup, FabricTagsProvider.BlockTagsProvider blockTags) {
         super(output, lookup, blockTags);
-        this.lookup = lookup;
     }
 
     @Override
     protected void addTags(HolderLookup.Provider provider) {
-        var lookup = this.lookup.join();
-        var itemLookup = lookup.lookupOrThrow(Registries.ITEM);
-
         groupDyedTag("dyed");
         groupDyedTag("dyes");
 
@@ -50,42 +44,42 @@ public class DDItemTags extends FabricTagProvider.ItemTagProvider {
         tagDyed(DDBlocks.CONCRETE_POWDER, loaderTag("concrete_powder"), loaderTag("concrete_powders"));
         tagDyed(DDBlocks.STAINED_GLASS, loaderTag("glass_blocks"));
         tagDyed(DDBlocks.STAINED_GLASS_PANES, loaderTag("glass_panes"));
-        tagDyed(DDBlocks.DYE_BASKETS, ModTags.SOAP_BLACKLIST_ITEM);
+        tagDyed(DDBlocks.DYE_BASKETS, supplementariesTag("non_cleanable"));
 
-        tagDyed(ModCompat.supplementariesHolders(itemLookup, "candle_holder"), supplementariesTag("candle_holders"));
-        tagDyed(ModCompat.supplementariesSquaredHolders(itemLookup, "gold_candle_holder"), supplementariesTag("candle_holders"), ItemTags.PIGLIN_LOVED);
-        tagDyed(ModCompat.supplementariesHolders(itemLookup, "flag"), supplementariesTag("flags"));
-        tagDyed(ModCompat.supplementariesHolders(itemLookup, "present"), supplementariesTag("presents"));
-        tagDyed(ModCompat.supplementariesHolders(itemLookup, "trapped_present"), supplementariesTag("trapped_presents"));
+        tagCompat(ModCompat.SUPPLEMENTARIES, "candle_holder", supplementariesTag("candle_holders"));
+        tagCompat(ModCompat.SUPPLEMENTARIES_SQUARED, "gold_candle_holder", supplementariesTag("candle_holders"), ItemTags.PIGLIN_LOVED);
+        tagCompat(ModCompat.SUPPLEMENTARIES, "flag", supplementariesTag("flags"));
+        tagCompat(ModCompat.SUPPLEMENTARIES, "present", supplementariesTag("presents"));
+        tagCompat(ModCompat.SUPPLEMENTARIES, "trapped_present", supplementariesTag("trapped_presents"));
 
-        getOrCreateTagBuilder(DDTags.SMELTS_INTO_CORAL_DYE).add(
-                Items.TUBE_CORAL,
-                Items.BRAIN_CORAL,
-                Items.BUBBLE_CORAL,
-                Items.FIRE_CORAL,
-                Items.HORN_CORAL,
-                Items.TUBE_CORAL_FAN,
-                Items.BRAIN_CORAL_FAN,
-                Items.BUBBLE_CORAL_FAN,
-                Items.FIRE_CORAL_FAN,
-                Items.HORN_CORAL_FAN,
-                Items.TUBE_CORAL_BLOCK,
-                Items.BRAIN_CORAL_BLOCK,
-                Items.BUBBLE_CORAL_BLOCK,
-                Items.FIRE_CORAL_BLOCK,
-                Items.HORN_CORAL_BLOCK
+        tag(DDTags.SMELTS_INTO_CORAL_DYE).add(
+                Items.TUBE_CORAL.builtInRegistryHolder().key(),
+                Items.BRAIN_CORAL.builtInRegistryHolder().key(),
+                Items.BUBBLE_CORAL.builtInRegistryHolder().key(),
+                Items.FIRE_CORAL.builtInRegistryHolder().key(),
+                Items.HORN_CORAL.builtInRegistryHolder().key(),
+                Items.TUBE_CORAL_FAN.builtInRegistryHolder().key(),
+                Items.BRAIN_CORAL_FAN.builtInRegistryHolder().key(),
+                Items.BUBBLE_CORAL_FAN.builtInRegistryHolder().key(),
+                Items.FIRE_CORAL_FAN.builtInRegistryHolder().key(),
+                Items.HORN_CORAL_FAN.builtInRegistryHolder().key(),
+                Items.TUBE_CORAL_BLOCK.builtInRegistryHolder().key(),
+                Items.BRAIN_CORAL_BLOCK.builtInRegistryHolder().key(),
+                Items.BUBBLE_CORAL_BLOCK.builtInRegistryHolder().key(),
+                Items.FIRE_CORAL_BLOCK.builtInRegistryHolder().key(),
+                Items.HORN_CORAL_BLOCK.builtInRegistryHolder().key()
         );
     }
 
     private void tag(DyedHolders<?, ? extends ItemLike> values, TagKey<Item> tag) {
         values.holders()
-                .map(it -> it.unwrapKey().orElseThrow().location())
+                .map(it -> ResourceKey.create(Registries.ITEM, it.unwrapKey().orElseThrow().identifier()))
                 .forEach(it -> tag(tag).addOptional(it));
     }
 
     private void groupDyedTag(String base) {
         Stream.concat(DyedHolders.vanillaColors(), DyedHolders.modColors()).forEach(color ->
-            getOrCreateTagBuilder(loaderTag(base)).addOptionalTag(loaderTag(base + "/" + color))
+            tag(loaderTag(base)).addOptionalTag(loaderTag(base + "/" + color.getSerializedName()))
         );
     }
 
@@ -97,9 +91,9 @@ public class DDItemTags extends FabricTagProvider.ItemTagProvider {
     @SafeVarargs
     private void tagDyed(DyedHolders<?, ? extends ItemLike> values, String base, TagKey<Item>... additionalTags) {
         values.forEach((dye, item) -> {
-            var id = item.unwrapKey().orElseThrow().location();
-            var tag = loaderTag(base + "/" + dye);
-            tag(tag).addOptional(id);
+            var key = ResourceKey.create(Registries.ITEM, item.unwrapKey().orElseThrow().identifier());
+            var tag = loaderTag(base + "/" + dye.getSerializedName());
+            tag(tag).addOptional(key);
         });
 
         for (var tag : additionalTags) {
@@ -107,12 +101,23 @@ public class DDItemTags extends FabricTagProvider.ItemTagProvider {
         }
     }
 
+    @SafeVarargs
+    private void tagCompat(String namespace, String name, TagKey<Item>... additionalTags) {
+        ModCompat.colors().forEach(color -> {
+            var key = ModCompat.key(Registries.ITEM, namespace, name, color);
+            tag(loaderTag("dyed/" + color.getSerializedName())).addOptional(key);
+            for (var additionalTag : additionalTags) {
+                tag(additionalTag).addOptional(key);
+            }
+        });
+    }
+
     private TagKey<Item> loaderTag(String path) {
-        return TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath("c", path));
+        return TagKey.create(Registries.ITEM, Identifier.fromNamespaceAndPath("c", path));
     }
 
     private TagKey<Item> supplementariesTag(String path) {
-        return TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath(ModCompat.SUPPLEMENTARIES, path));
+        return TagKey.create(Registries.ITEM, Identifier.fromNamespaceAndPath(ModCompat.SUPPLEMENTARIES, path));
     }
 
 }

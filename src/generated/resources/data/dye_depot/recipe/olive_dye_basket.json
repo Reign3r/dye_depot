@@ -1,10 +1,7 @@
 {
   "type": "minecraft:crafting_shaped",
-  "category": "misc",
   "key": {
-    "#": {
-      "item": "dye_depot:olive_dye"
-    }
+    "#": "dye_depot:olive_dye"
   },
   "pattern": [
     "###",
@@ -12,7 +9,6 @@
     "###"
   ],
   "result": {
-    "count": 1,
     "id": "dye_depot:olive_dye_basket"
   }
 }
