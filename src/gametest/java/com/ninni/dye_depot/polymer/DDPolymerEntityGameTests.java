@@ -40,6 +40,7 @@ import net.minecraft.world.level.block.CandleCakeBlock;
 import net.minecraft.world.level.block.entity.BannerBlockEntity;
 import net.minecraft.world.level.block.entity.BannerPatternLayers;
 import net.minecraft.world.level.block.entity.BannerPatterns;
+import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.world.phys.Vec3;
 
 public final class DDPolymerEntityGameTests {
@@ -185,6 +186,11 @@ public final class DDPolymerEntityGameTests {
                         .layers().isEmpty(),
                 "unpatterned placed banners start on the exact static model"
         );
+        helper.assertValueEqual(
+                standingDisplay.getItem().get(DataComponents.ITEM_MODEL),
+                DyeDepot.modLoc("polymer/maroon_banner_plain"),
+                "unpatterned standing banner combines native geometry with its exact custom cloth color"
+        );
         ItemStack unwatchedStack = standingDisplay.getItem();
         var patternedStanding = new ItemStack(DDItems.BANNERS.getOrThrow(color));
         patternedStanding.set(DataComponents.BANNER_PATTERNS, patterns);
@@ -241,12 +247,12 @@ public final class DDPolymerEntityGameTests {
         helper.assertTrue(
                 standingDisplay.getItem().getOrDefault(DataComponents.BANNER_PATTERNS, BannerPatternLayers.EMPTY)
                         .layers().isEmpty(),
-                "removing block-entity patterns restores the static model"
+                "removing block-entity patterns clears the dynamic layers"
         );
-        helper.assertTrue(
-                !DyeDepot.modLoc("polymer/maroon_banner_patterned")
-                        .equals(standingDisplay.getItem().get(DataComponents.ITEM_MODEL)),
-                "removed patterns clear the ground special-model override"
+        helper.assertValueEqual(
+                standingDisplay.getItem().get(DataComponents.ITEM_MODEL),
+                DyeDepot.modLoc("polymer/maroon_banner_plain"),
+                "removing patterns restores the exact custom-color vanilla-style renderer"
         );
 
         BlockPos wallRelative = new BlockPos(3, 2, 1);
@@ -309,7 +315,73 @@ public final class DDPolymerEntityGameTests {
     }
 
     @GameTest
-    public void candleDisplayAutoTickSupportsLightingTransitionsAndUsesExactVanillaOffsets(GameTestHelper helper) {
+    @SuppressWarnings("removal")
+    public void shulkerDisplayTracksNativeLidAnimationCollisionAndLighting(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var color = DDDyes.ROSE.get();
+        BlockPos relative = new BlockPos(1, 2, 1);
+        BlockPos pos = helper.absolutePos(relative);
+        var state = DDBlocks.SHULKER_BOXES.getOrThrow(color).defaultBlockState();
+        helper.setBlock(relative, state);
+
+        var entity = (ShulkerBoxBlockEntity) level.getBlockEntity(pos);
+        var attachment = BlockBoundAttachment.get(level, pos);
+        helper.assertTrue(attachment != null, "custom shulker has a live Polymer block attachment");
+        var holder = attachment.holder();
+        var display = (ItemDisplayElement) holder.getElements().getFirst();
+        helper.assertValueEqual(
+                display.getItem().get(DataComponents.ITEM_MODEL),
+                DyeDepot.modLoc("polymer/rose_shulker_box_0"),
+                "closed shulker starts on the native closed special renderer"
+        );
+
+        var player = helper.makeMockServerPlayerInLevel();
+        var connection = ((ServerCommonPacketListenerImplAccessor) player.connection).getConnection();
+        var context = connection.getPacketContext();
+        context.set(PacketContextImpl.REGISTRY_ACCESS, level.registryAccess());
+        context.set(PacketContextImpl.SERVER_INSTANCE, level.getServer());
+        context.set(PacketContextImpl.GAME_PROFILE, player.getGameProfile());
+        holder.startWatching(player);
+
+        entity.triggerEvent(1, 1);
+        for (int tick = 0; tick < 5; tick++) {
+            ShulkerBoxBlockEntity.tick(level, pos, state, entity);
+            holder.tick();
+        }
+        helper.assertValueEqual(
+                display.getItem().get(DataComponents.ITEM_MODEL),
+                DyeDepot.modLoc("polymer/rose_shulker_box_5"),
+                "opening shulker advances through the native special-renderer lid frames"
+        );
+        helper.assertTrue(entity.getBoundingBox(state).maxY > 1.0, "opening lid expands the authoritative collision box");
+        helper.assertTrue(display.getBrightness() != null, "shulker display uses surrounding light instead of sampling inside its opaque carrier");
+
+        for (int tick = 5; tick < 10; tick++) {
+            ShulkerBoxBlockEntity.tick(level, pos, state, entity);
+            holder.tick();
+        }
+        helper.assertValueEqual(
+                display.getItem().get(DataComponents.ITEM_MODEL),
+                DyeDepot.modLoc("polymer/rose_shulker_box_10"),
+                "fully open shulker reaches the native fully-open special renderer"
+        );
+
+        entity.triggerEvent(1, 0);
+        for (int tick = 0; tick < 10; tick++) {
+            ShulkerBoxBlockEntity.tick(level, pos, state, entity);
+            holder.tick();
+        }
+        helper.assertValueEqual(
+                display.getItem().get(DataComponents.ITEM_MODEL),
+                DyeDepot.modLoc("polymer/rose_shulker_box_0"),
+                "closing shulker returns to the native closed special renderer"
+        );
+        holder.destroy();
+        helper.succeed();
+    }
+
+    @GameTest
+    public void candleDonorUsesNativeParticlesWhileCandleCakeUsesServerParticles(GameTestHelper helper) {
         Map<Integer, List<Vec3>> expected = Map.of(
                 1, List.of(new Vec3(8 / 16.0, 8 / 16.0, 8 / 16.0)),
                 2, List.of(new Vec3(6 / 16.0, 7 / 16.0, 8 / 16.0), new Vec3(10 / 16.0, 8 / 16.0, 7 / 16.0)),
@@ -333,12 +405,12 @@ public final class DDPolymerEntityGameTests {
             var lit = unlit.setValue(CandleBlock.LIT, true);
             var overlay = BlockWithElementHolder.get(lit);
             helper.assertTrue(
-                    overlay.tickElementHolder(helper.getLevel(), BlockPos.ZERO, unlit),
-                    count + " initially unlit candle remains tick-enabled for a later lit transition"
+                    !overlay.tickElementHolder(helper.getLevel(), BlockPos.ZERO, unlit),
+                    count + " unlit candle relies on its native donor state and does not server-tick particles"
             );
             helper.assertTrue(
-                    overlay.tickElementHolder(helper.getLevel(), BlockPos.ZERO, lit),
-                    count + " lit candle display ticks"
+                    !overlay.tickElementHolder(helper.getLevel(), BlockPos.ZERO, lit),
+                    count + " lit candle relies on native donor particles without duplicates"
             );
             helper.assertValueEqual(
                     DDPolymerBlocks.candleParticleOffsets(lit),

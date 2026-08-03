@@ -23,7 +23,8 @@ import com.ninni.dye_depot.registry.DDMapDecorationType;
 import com.ninni.dye_depot.registry.DDParticles;
 import com.ninni.dye_depot.registry.DDPoiTypes;
 import com.ninni.dye_depot.registry.DDSoundEvents;
-import eu.pb4.polymer.core.api.block.PolymerBlock;
+import eu.pb4.polymer.blocks.api.PolymerTexturedBlock;
+import eu.pb4.polymer.core.api.block.BlockMapper;
 import eu.pb4.polymer.core.api.entity.PolymerEntityUtils;
 import eu.pb4.polymer.core.api.item.PolymerCreativeModeTabUtils;
 import eu.pb4.polymer.core.api.item.PolymerItem;
@@ -155,7 +156,7 @@ class PolymerParityTest {
             blockCount++;
             expectedStates += block.getStateDefinition().getPossibleStates().size();
             assertInstanceOf(
-                    PolymerBlock.class,
+                    PolymerTexturedBlock.class,
                     PolymerSyncedObject.getSyncedObject(BuiltInRegistries.BLOCK, block),
                     BuiltInRegistries.BLOCK.getKey(block).toString()
             );
@@ -168,6 +169,23 @@ class PolymerParityTest {
         assertEquals(256, blockCount);
         assertEquals(blockCount, DDPolymerBlocks.registeredBlockCount());
         assertEquals(expectedStates, DDPolymerBlocks.mappedStateCount());
+    }
+
+    @Test
+    void defaultPolymerMapperPreservesEveryRequestedTexturedCarrier() {
+        PacketContext context = new Connection(PacketFlow.CLIENTBOUND).getPacketContext();
+        BlockMapper mapper = BlockMapper.getDefault(context);
+
+        for (Block block : BuiltInRegistries.BLOCK) {
+            if (!isDyeDepot(BuiltInRegistries.BLOCK.getKey(block))) {
+                continue;
+            }
+            block.getStateDefinition().getPossibleStates().forEach(state -> assertSame(
+                    DDPolymerBlocks.polymerState(state),
+                    mapper.toClientSideState(state, context),
+                    state.toString()
+            ));
+        }
     }
 
     @Test
@@ -225,13 +243,48 @@ class PolymerParityTest {
     }
 
     @Test
+    void transparentAndThinFamiliesUseClientGeometryThatCannotExposeHiddenFaces() {
+        DDBlocks.STAINED_GLASS.values().forEach(block -> assertFalse(
+                DDPolymerBlocks.polymerState(block.defaultBlockState()).canOcclude(),
+                block.toString()
+        ));
+        DDBlocks.CARPETS.values().forEach(block -> {
+            var carrier = DDPolymerBlocks.polymerState(block.defaultBlockState());
+            assertSame(Blocks.CARPET.pick(DyeColor.ORANGE), carrier.getBlock(), block.toString());
+            var bounds = carrier.getShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO).bounds();
+            assertTrue(bounds.getXsize() >= 14.0 / 16.0, carrier.toString());
+            assertTrue(bounds.getZsize() >= 14.0 / 16.0, carrier.toString());
+            assertTrue(bounds.maxY <= 1.0 / 16.0, carrier.toString());
+            assertEquals(
+                    block.defaultBlockState().getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO).toAabbs(),
+                    carrier.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO).toAabbs(),
+                    block.toString()
+            );
+        });
+        DDBlocks.CANDLES.values().forEach(block ->
+                block.getStateDefinition().getPossibleStates().forEach(state -> {
+                    var carrier = DDPolymerBlocks.polymerState(state);
+                    assertSame(Blocks.DYED_CANDLE.pick(DyeColor.ORANGE), carrier.getBlock(), state.toString());
+                    assertEquals(
+                            state.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO).toAabbs(),
+                            carrier.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO).toAabbs(),
+                            state.toString()
+                    );
+                })
+        );
+        assertNotNull(BlockWithElementHolder.get(Blocks.CARPET.pick(DyeColor.ORANGE).defaultBlockState()));
+        assertNotNull(BlockWithElementHolder.get(Blocks.DYED_CANDLE.pick(DyeColor.ORANGE).defaultBlockState()));
+    }
+
+    @Test
     void virtualBlocksUseSharedTargetableGeometryCarriersWithoutPoolFallbacks() {
-        assertEquals(45, DDPolymerBlocks.virtualCarrierCount());
+        assertEquals(43, DDPolymerBlocks.virtualCarrierCount());
         assertEquals(0, DDPolymerBlocks.cosmeticFallbackCount());
 
         for (var family : List.of(
                 DDBlocks.CANDLES.values(),
                 DDBlocks.CANDLE_CAKES.values(),
+                DDBlocks.CARPETS.values(),
                 DDBlocks.STAINED_GLASS_PANES.values(),
                 DDBlocks.BEDS.values(),
                 DDBlocks.SHULKER_BOXES.values(),
@@ -557,6 +610,21 @@ class PolymerParityTest {
             JsonObject english = JsonParser.parseString(read(zip, "assets/dye_depot/lang/en_us.json")).getAsJsonObject();
             assertEquals("Sky Dye Basket", english.get("block.dye_depot.light_blue_dye_basket").getAsString());
             assertEquals("Ash Dye Basket", english.get("block.dye_depot.light_gray_dye_basket").getAsString());
+
+            String donorEmpty = "dye_depot:block/polymer/donor_empty";
+            assertNotNull(zip.getEntry("assets/dye_depot/models/block/polymer/donor_empty.json"));
+            JsonObject donorCarpet = JsonParser.parseString(read(zip, "assets/minecraft/blockstates/orange_carpet.json")).getAsJsonObject();
+            assertEquals(donorEmpty, donorCarpet.getAsJsonObject("variants").getAsJsonObject("").get("model").getAsString());
+            JsonObject donorCandles = JsonParser.parseString(read(zip, "assets/minecraft/blockstates/orange_candle.json")).getAsJsonObject();
+            assertEquals(8, donorCandles.getAsJsonObject("variants").size());
+            donorCandles.getAsJsonObject("variants").entrySet().forEach(entry ->
+                    assertEquals(donorEmpty, entry.getValue().getAsJsonObject().get("model").getAsString(), entry.getKey())
+            );
+            assertTrue(read(zip, "assets/dye_depot/items/polymer/donor_orange_carpet.json").contains("minecraft:block/orange_carpet"));
+            for (int count = 1; count <= 4; count++) {
+                assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/donor_orange_candle_" + count + ".json"));
+                assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/donor_orange_candle_" + count + "_lit.json"));
+            }
             for (String color : ResourceTestSupport.CUSTOM_COLORS) {
                 String bannerPath = "assets/dye_depot/items/" + color + "_banner.json";
                 String bannerJson = read(zip, bannerPath);
@@ -586,21 +654,52 @@ class PolymerParityTest {
                     assertEquals(patterned.getValue(), special.get("attachment").getAsString(), patterned.getKey());
                 }
 
+                for (var plain : Map.of(
+                        "assets/dye_depot/items/polymer/" + color + "_banner_plain.json", "ground",
+                        "assets/dye_depot/items/polymer/" + color + "_wall_banner_plain.json", "wall"
+                ).entrySet()) {
+                    JsonObject definition = JsonParser.parseString(read(zip, plain.getKey())).getAsJsonObject();
+                    JsonObject model = definition.getAsJsonObject("model");
+                    assertEquals("minecraft:composite", model.get("type").getAsString(), plain.getKey());
+                    var models = model.getAsJsonArray("models");
+                    assertEquals("minecraft:special", models.get(0).getAsJsonObject().get("type").getAsString(), plain.getKey());
+                    assertEquals(plain.getValue(), models.get(0).getAsJsonObject().getAsJsonObject("model").get("attachment").getAsString(), plain.getKey());
+                    assertEquals("minecraft:model", models.get(1).getAsJsonObject().get("type").getAsString(), plain.getKey());
+                    assertTrue(models.get(1).getAsJsonObject().get("model").getAsString().contains(color), plain.getKey());
+                }
+
                 for (String path : List.of(
                         "assets/minecraft/equipment/" + color + "_carpet.json",
                         "assets/dye_depot/textures/entity/equipment/llama_body/" + color + ".png",
                         "assets/dye_depot/items/polymer/" + color + "_sheep_wool.json",
+                        "assets/dye_depot/items/polymer/" + color + "_carpet.json",
+                        "assets/dye_depot/items/polymer/" + color + "_pane_0.json",
+                        "assets/dye_depot/models/block/polymer/" + color + "_pane_0.json",
                         "assets/dye_depot/models/item/polymer/" + color + "_sheep_wool.json",
                         "assets/dye_depot/models/item/polymer/" + color + "_banner.json",
                         "assets/dye_depot/models/block/polymer/" + color + "_banner.json",
                         "assets/dye_depot/models/block/polymer/" + color + "_wall_banner.json",
-                        "assets/dye_depot/models/block/polymer/" + color + "_shulker_box.json"
+                        "assets/dye_depot/models/block/polymer/" + color + "_banner_exact.json",
+                        "assets/dye_depot/models/block/polymer/" + color + "_wall_banner_exact.json",
+                        "assets/dye_depot/models/item/polymer/" + color + "_shulker_empty.json"
                 )) {
                     assertNotNull(zip.getEntry(path), path);
                 }
                 String sheepModel = read(zip, "assets/dye_depot/models/item/polymer/" + color + "_sheep_wool.json");
                 assertTrue(sheepModel.contains("\"elements\""));
                 assertTrue(sheepModel.contains(color + "_wool"));
+
+                for (int step = 0; step <= 10; step++) {
+                    String path = "assets/dye_depot/items/polymer/" + color + "_shulker_box_" + step + ".json";
+                    JsonObject definition = JsonParser.parseString(read(zip, path)).getAsJsonObject();
+                    JsonObject model = definition.getAsJsonObject("model");
+                    assertEquals("minecraft:special", model.get("type").getAsString(), path);
+                    assertEquals("dye_depot:item/polymer/" + color + "_shulker_empty", model.get("base").getAsString(), path);
+                    JsonObject special = model.getAsJsonObject("model");
+                    assertEquals("minecraft:shulker_box", special.get("type").getAsString(), path);
+                    assertEquals("dye_depot:shulker_" + color, special.get("texture").getAsString(), path);
+                    assertEquals(step / 10.0f, special.get("openness").getAsFloat(), 0.0001f, path);
+                }
             }
         }
     }

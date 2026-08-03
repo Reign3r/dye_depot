@@ -6,6 +6,7 @@ import com.ninni.dye_depot.registry.DDBlocks;
 import eu.pb4.polymer.blocks.api.BlockModelType;
 import eu.pb4.polymer.blocks.api.PolymerBlockModel;
 import eu.pb4.polymer.blocks.api.PolymerBlockResourceUtils;
+import eu.pb4.polymer.blocks.api.PolymerTexturedBlock;
 import eu.pb4.polymer.core.api.block.PolymerBlock;
 import eu.pb4.polymer.virtualentity.api.BlockWithElementHolder;
 import eu.pb4.polymer.virtualentity.api.ElementHolder;
@@ -28,10 +29,12 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Brightness;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.BannerBlock;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
@@ -44,6 +47,7 @@ import net.minecraft.world.level.block.StainedGlassPaneBlock;
 import net.minecraft.world.level.block.WallBannerBlock;
 import net.minecraft.world.level.block.entity.BannerBlockEntity;
 import net.minecraft.world.level.block.entity.BannerPatternLayers;
+import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.Property;
@@ -54,6 +58,7 @@ import org.slf4j.LoggerFactory;
 
 public final class DDPolymerBlocks {
     private static final Logger LOGGER = LoggerFactory.getLogger("Dye Depot/Polymer Blocks");
+    private static final DyeColor DONOR_COLOR = DyeColor.ORANGE;
     private static final Map<Block, StateOverlay> OVERLAYS = new HashMap<>();
     private static final Set<BlockState> VIRTUAL_CARRIERS = new HashSet<>();
     private static final Set<String> COSMETIC_FALLBACKS = new LinkedHashSet<>();
@@ -70,12 +75,13 @@ public final class DDPolymerBlocks {
     }
 
     static void register() {
+        registerDonorDisplays();
         DDBlocks.WOOL.forEach((color, holder) -> registerSingle(holder.value(), BlockModelType.FULL_BLOCK, Blocks.WOOL.pick(DDPolymerColors.vanillaColor(color))));
-        DDBlocks.CARPETS.forEach((color, holder) -> registerSingle(holder.value(), BlockModelType.TRIPWIRE_FLAT, Blocks.CARPET.pick(DDPolymerColors.vanillaColor(color))));
+        DDBlocks.CARPETS.forEach((color, holder) -> registerCarpet(holder.value(), color));
         DDBlocks.TERRACOTTA.forEach((color, holder) -> registerSingle(holder.value(), BlockModelType.FULL_BLOCK, Blocks.DYED_TERRACOTTA.pick(DDPolymerColors.vanillaColor(color))));
         DDBlocks.CONCRETE.forEach((color, holder) -> registerSingle(holder.value(), BlockModelType.FULL_BLOCK, Blocks.CONCRETE.pick(DDPolymerColors.vanillaColor(color))));
         DDBlocks.CONCRETE_POWDER.forEach((color, holder) -> registerSingle(holder.value(), BlockModelType.FULL_BLOCK, Blocks.CONCRETE_POWDER.pick(DDPolymerColors.vanillaColor(color))));
-        DDBlocks.STAINED_GLASS.forEach((color, holder) -> registerSingle(holder.value(), BlockModelType.FULL_BLOCK, Blocks.STAINED_GLASS.pick(DDPolymerColors.vanillaColor(color))));
+        DDBlocks.STAINED_GLASS.forEach((color, holder) -> registerSingle(holder.value(), BlockModelType.LEAVES, Blocks.STAINED_GLASS.pick(DDPolymerColors.vanillaColor(color))));
 
         DDBlocks.GLAZED_TERRACOTTA.forEach((color, holder) -> registerGlazed(holder.value(), color));
         DDBlocks.DYE_BASKETS.forEach((color, holder) -> registerBasket(holder.value(), color));
@@ -109,6 +115,20 @@ public final class DDPolymerBlocks {
         register(block, ignored -> model, state -> copySharedProperties(state, fallback));
     }
 
+    private static void registerCarpet(Block block, DyeColor color) {
+        BlockState donor = donorCarpet().defaultBlockState();
+        registerVirtual(block,
+                state -> donor,
+                state -> donor,
+                state -> displayStack(block.asItem(), "polymer/" + color.getName() + "_carpet"),
+                state -> 0.0f,
+                state -> false,
+                state -> List.of(),
+                null,
+                null
+        );
+    }
+
     private static void registerGlazed(Block block, DyeColor color) {
         Map<Direction, BlockState> states = new HashMap<>();
         BlockState nearest = Blocks.GLAZED_TERRACOTTA.pick(DDPolymerColors.vanillaColor(color)).defaultBlockState();
@@ -131,22 +151,52 @@ public final class DDPolymerBlocks {
     }
 
     private static void registerCandle(Block block, DyeColor color) {
-        BlockState nearest = Blocks.DYED_CANDLE.pick(DDPolymerColors.vanillaColor(color)).defaultBlockState();
+        BlockState donor = donorCandle().defaultBlockState();
         registerVirtual(block,
-                state -> emptyOrFallback(
-                        state.getValue(CandleBlock.WATERLOGGED)
-                                ? BlockModelType.PROPAGULE_WATERLOGGED
-                                : BlockModelType.PLANT,
-                        copySharedProperties(state, nearest),
-                        block
-                ),
-                state -> copySharedProperties(state, nearest),
+                state -> copySharedProperties(state, donor),
+                state -> copySharedProperties(state, donor),
                 state -> displayStack(block.asItem(), "polymer/" + color.getName() + "_candle_" + state.getValue(CandleBlock.CANDLES) + (state.getValue(CandleBlock.LIT) ? "_lit" : "")),
                 state -> 0.0f,
-                state -> state.getValue(CandleBlock.LIT),
-                DDPolymerBlocks::candleParticleOffsets,
+                state -> false,
+                state -> List.of(),
+                null,
                 null
         );
+    }
+
+    private static void registerDonorDisplays() {
+        Block carpet = donorCarpet();
+        registerDisplayOnly(
+                carpet,
+                state -> displayStack(carpet.asItem(), "polymer/donor_orange_carpet")
+        );
+
+        Block candle = donorCandle();
+        registerDisplayOnly(
+                candle,
+                state -> displayStack(
+                        candle.asItem(),
+                        "polymer/donor_orange_candle_" + state.getValue(CandleBlock.CANDLES)
+                                + (state.getValue(CandleBlock.LIT) ? "_lit" : "")
+                )
+        );
+    }
+
+    private static void registerDisplayOnly(Block block, Function<BlockState, ItemStack> stack) {
+        if (!BlockWithElementHolder.registerOverlay(
+                block,
+                new DisplayOverlay(stack, state -> 0.0f, state -> false, state -> List.of(), null, null)
+        )) {
+            throw new IllegalStateException("Could not reserve donor display for " + BuiltInRegistries.BLOCK.getKey(block));
+        }
+    }
+
+    private static Block donorCarpet() {
+        return Blocks.CARPET.pick(DONOR_COLOR);
+    }
+
+    private static Block donorCandle() {
+        return Blocks.DYED_CANDLE.pick(DONOR_COLOR);
     }
 
     private static void registerCandleCake(Block block, DyeColor color) {
@@ -159,6 +209,7 @@ public final class DDPolymerBlocks {
                 state -> 0.0f,
                 state -> state.getValue(CandleCakeBlock.LIT),
                 DDPolymerBlocks::candleParticleOffsets,
+                null,
                 null
         );
     }
@@ -176,6 +227,7 @@ public final class DDPolymerBlocks {
                 state -> state.getValue(BedBlock.FACING).toYRot(),
                 state -> false,
                 state -> List.of(),
+                null,
                 null
         );
     }
@@ -199,6 +251,7 @@ public final class DDPolymerBlocks {
                 state -> 0.0f,
                 state -> false,
                 state -> List.of(),
+                null,
                 null
         );
     }
@@ -235,7 +288,8 @@ public final class DDPolymerBlocks {
                 state -> state.getValue(ShulkerBoxBlock.FACING).toYRot(),
                 state -> false,
                 state -> List.of(),
-                null
+                null,
+                color.getName()
         );
     }
 
@@ -244,11 +298,12 @@ public final class DDPolymerBlocks {
         registerVirtual(block,
                 state -> emptyOrFallback(BlockModelType.VINES, copySharedProperties(state, nearest), block),
                 state -> copySharedProperties(state, nearest),
-                state -> new ItemStack(block.asItem()),
+                state -> displayStack(block.asItem(), "polymer/" + color.getName() + "_banner_plain"),
                 state -> state.getValue(BannerBlock.ROTATION) * 22.5f,
                 state -> false,
                 state -> List.of(),
-                "polymer/" + color.getName() + "_banner_patterned"
+                "polymer/" + color.getName() + "_banner_patterned",
+                null
         );
     }
 
@@ -258,11 +313,12 @@ public final class DDPolymerBlocks {
         registerVirtual(block,
                 state -> emptyOrFallback(BlockModelType.VINES, copySharedProperties(state, nearest), block),
                 state -> copySharedProperties(state, nearest),
-                state -> displayStack(bannerItem, "polymer/" + color.getName() + "_wall_banner"),
+                state -> displayStack(bannerItem, "polymer/" + color.getName() + "_wall_banner_plain"),
                 state -> state.getValue(WallBannerBlock.FACING).toYRot(),
                 state -> false,
                 state -> List.of(),
-                "polymer/" + color.getName() + "_wall_banner_patterned"
+                "polymer/" + color.getName() + "_wall_banner_patterned",
+                null
         );
     }
 
@@ -274,12 +330,13 @@ public final class DDPolymerBlocks {
             Function<BlockState, Float> yaw,
             Function<BlockState, Boolean> lit,
             Function<BlockState, List<Vec3>> particleOffsets,
-            String patternedBannerModel
+            String patternedBannerModel,
+            String shulkerColor
     ) {
         register(block, visual, breakState);
         if (!BlockWithElementHolder.registerOverlay(
                 block,
-                new DisplayOverlay(stack, yaw, lit, particleOffsets, patternedBannerModel)
+                new DisplayOverlay(stack, yaw, lit, particleOffsets, patternedBannerModel, shulkerColor)
         )) {
             throw new IllegalStateException("Could not register virtual display for " + BuiltInRegistries.BLOCK.getKey(block));
         }
@@ -377,7 +434,7 @@ public final class DDPolymerBlocks {
         return COSMETIC_FALLBACKS.size();
     }
 
-    private record StateOverlay(Map<BlockState, BlockState> states, Map<BlockState, BlockState> breakStates) implements PolymerBlock {
+    private record StateOverlay(Map<BlockState, BlockState> states, Map<BlockState, BlockState> breakStates) implements PolymerTexturedBlock {
         @Override
         public BlockState getPolymerBlockState(BlockState state, PacketContext context) {
             return states.get(state);
@@ -394,7 +451,8 @@ public final class DDPolymerBlocks {
             Function<BlockState, Float> yaw,
             Function<BlockState, Boolean> lit,
             Function<BlockState, List<Vec3>> particleOffsets,
-            String patternedBannerModel
+            String patternedBannerModel,
+            String shulkerColor
     ) implements BlockWithElementHolder {
         @Override
         public ElementHolder createElementHolder(ServerLevel level, BlockPos pos, BlockState initialState) {
@@ -406,7 +464,8 @@ public final class DDPolymerBlocks {
                     yaw,
                     lit,
                     particleOffsets,
-                    patternedBannerModel
+                    patternedBannerModel,
+                    shulkerColor
             );
         }
 
@@ -415,7 +474,7 @@ public final class DDPolymerBlocks {
             // BlockBoundAttachment fixes auto-tick at creation time. Candle
             // holders therefore stay tick-enabled even when initially unlit;
             // onTick performs the cheap LIT early-return until they are lit.
-            return patternedBannerModel != null || !particleOffsets.apply(state).isEmpty();
+            return patternedBannerModel != null || shulkerColor != null || !particleOffsets.apply(state).isEmpty();
         }
     }
 
@@ -427,9 +486,11 @@ public final class DDPolymerBlocks {
         private final Function<BlockState, Boolean> lit;
         private final Function<BlockState, List<Vec3>> particleOffsets;
         private final String patternedBannerModel;
+        private final String shulkerColor;
         private final ItemDisplayElement display = new ItemDisplayElement();
         private BlockState state;
         private BannerPatternLayers displayedBannerPatterns = BannerPatternLayers.EMPTY;
+        private int displayedShulkerStep = -1;
 
         private StateDisplayHolder(
                 ServerLevel level,
@@ -439,7 +500,8 @@ public final class DDPolymerBlocks {
                 Function<BlockState, Float> yaw,
                 Function<BlockState, Boolean> lit,
                 Function<BlockState, List<Vec3>> particleOffsets,
-                String patternedBannerModel
+                String patternedBannerModel,
+                String shulkerColor
         ) {
             this.level = level;
             this.pos = pos.immutable();
@@ -448,6 +510,7 @@ public final class DDPolymerBlocks {
             this.lit = lit;
             this.particleOffsets = particleOffsets;
             this.patternedBannerModel = patternedBannerModel;
+            this.shulkerColor = shulkerColor;
             display.setItemDisplayContext(ItemDisplayContext.NONE);
             display.setDisplaySize(1.0f, 1.0f);
             display.setScale(new Vector3f(1.0f));
@@ -460,12 +523,20 @@ public final class DDPolymerBlocks {
             if (patternedBannerModel != null) {
                 displayedBannerPatterns = readBannerPatterns();
             }
+            if (shulkerColor != null) {
+                displayedShulkerStep = readShulkerStep();
+            }
             rebuildItem();
-            display.setYaw(yaw.apply(state));
-            // Do not force fullbright. The invisible carrier's authoritative
-            // light packet already exposes candle count light (3/6/9/12), and
-            // the item display must sample that world lighting normally.
-            display.setBrightness(null);
+            if (shulkerColor != null) {
+                display.setYaw(0.0f);
+                display.setLeftRotation(state.getValue(ShulkerBoxBlock.FACING).getRotation());
+            } else {
+                display.setYaw(yaw.apply(state));
+            }
+            // Opaque full-block carriers make a display at their center sample
+            // zero light. Only shulkers use that carrier; partial displays keep
+            // normal world lighting so candle light transitions stay natural.
+            display.setBrightness(shulkerColor != null ? surroundingBrightness() : null);
         }
 
         private void rebuildItem() {
@@ -473,6 +544,9 @@ public final class DDPolymerBlocks {
             if (patternedBannerModel != null && !displayedBannerPatterns.layers().isEmpty()) {
                 next.set(DataComponents.BANNER_PATTERNS, displayedBannerPatterns);
                 next.set(DataComponents.ITEM_MODEL, DyeDepot.modLoc(patternedBannerModel));
+            }
+            if (shulkerColor != null) {
+                next.set(DataComponents.ITEM_MODEL, DyeDepot.modLoc("polymer/" + shulkerColor + "_shulker_box_" + displayedShulkerStep));
             }
             if (!ItemStack.isSameItemSameComponents(display.getItem(), next)) {
                 display.setItem(next);
@@ -502,6 +576,40 @@ public final class DDPolymerBlocks {
             }
         }
 
+        private int readShulkerStep() {
+            if (level == null) {
+                return 0;
+            }
+            var chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+            if (chunk != null && chunk.getBlockEntity(pos) instanceof ShulkerBoxBlockEntity shulker) {
+                return Math.max(0, Math.min(10, Math.round(shulker.getProgress(1.0f) * 10.0f)));
+            }
+            return 0;
+        }
+
+        private void refreshShulker() {
+            int next = readShulkerStep();
+            if (next != displayedShulkerStep) {
+                displayedShulkerStep = next;
+                rebuildItem();
+                display.setBrightness(surroundingBrightness());
+            }
+        }
+
+        private Brightness surroundingBrightness() {
+            if (level == null) {
+                return null;
+            }
+            int block = level.getBrightness(LightLayer.BLOCK, pos);
+            int sky = level.getBrightness(LightLayer.SKY, pos);
+            for (Direction direction : Direction.values()) {
+                BlockPos neighbor = pos.relative(direction);
+                block = Math.max(block, level.getBrightness(LightLayer.BLOCK, neighbor));
+                sky = Math.max(sky, level.getBrightness(LightLayer.SKY, neighbor));
+            }
+            return new Brightness(block, sky);
+        }
+
         @Override
         protected void onTick() {
             super.onTick();
@@ -510,6 +618,9 @@ public final class DDPolymerBlocks {
             }
             if (patternedBannerModel != null) {
                 refreshBannerPatterns();
+            }
+            if (shulkerColor != null) {
+                refreshShulker();
             }
             if (!lit.apply(state) || particleOffsets.apply(state).isEmpty()) {
                 return;

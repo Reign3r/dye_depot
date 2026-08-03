@@ -294,27 +294,30 @@ Sky/Ash override pack.
 
 Every state of all 256 registered blocks has a vanilla-protocol block state,
 and the exact authored color/model is supplied by Polymer models or a virtual
-item display as follows:
+item display as follows. Every overlay is registered as a
+`PolymerTexturedBlock`, so Polymer preserves its requested textured/empty
+carrier instead of remapping it a second time to a visible vanilla note block:
 
 | Family | Vanilla-client representation |
 |---|---|
-| wool, terracotta, concrete, concrete powder, stained glass | exact resource-pack model on a full-block carrier |
+| wool, terracotta, concrete, concrete powder | exact resource-pack model on a full-block carrier |
+| stained glass | exact translucent model on a non-occluding full-cube carrier, preventing the carrier from culling terrain faces below the glass |
 | glazed terracotta | exact model with state-driven horizontal rotation |
 | dye baskets | exact model with state-driven horizontal rotation |
-| carpets | exact model on a flat tripwire/carpet-shaped carrier |
-| candles | shared invisible dry/waterlogged thin carriers plus exact count/lit display models; tracked lit holders emit vanilla flame/smoke and ambient sound at vanilla offsets/probabilities |
+| carpets | reserved orange-carpet donor carrier with native one-pixel movement/selection collision; the generated pack hides the placed donor model and exact-color displays render both custom carpets and real orange carpets without carrier bleed |
+| candles | reserved orange-candle donor carrier with native count/lit/waterlogged states and collision; the generated pack hides the placed donor models and state-aware displays render both custom candles and real orange candles while native client candle particles avoid duplicates |
 | candle cakes | one shared invisible bottom-slab carrier plus exact lit/unlit display models |
-| stained-glass panes | 32 shared invisible dry/waterlogged bars carriers for the 16 connection masks plus exact composite display models and client-visible water |
+| stained-glass panes | 32 shared invisible dry/waterlogged bars carriers for the 16 connection masks plus exact precombined display models and client-visible water; each mask is baked around the block origin so connected arms cannot be offset by item-submodel rotation |
 | beds | eight shared invisible bed carriers for facing and head/foot state plus exact display models; entity yaw compensates for the vanilla item-display renderer transform |
-| shulker boxes | one shared invisible full-block carrier plus an exact special-renderer model |
-| standing banners | one shared invisible targetable vines carrier; exact static base geometry for unpatterned banners, switching to a ground-attached vanilla banner special renderer when the block entity has patterns |
-| wall banners | the shared invisible targetable vines carrier; exact static base wall geometry when unpatterned, switching to a wall-attached vanilla banner special renderer when patterned |
+| shulker boxes | one shared invisible full-block carrier plus the vanilla shulker special renderer using the authored entity texture, a transparent base that cannot show through an open lid, 11 lid-openness frames driven by the real block entity, surrounding light sampling, and native server collision/pushing |
+| standing banners | one shared invisible targetable vines carrier; plain banners combine the ground-attached vanilla special renderer with an exact custom-color cloth overlay, while patterned banners use the codec-safe vanilla special renderer |
+| wall banners | the shared invisible targetable vines carrier; plain banners combine the wall-attached vanilla special renderer with an exact custom-color cloth overlay, while patterned banners use the codec-safe vanilla special renderer |
 
 Banner holders inspect block-entity patterns only from an already loaded
 chunk. This preserves patterned visuals while preventing recursive chunk loads
 when holders are reconstructed during server restart.
 
-The normal standalone allocation uses 45 shared invisible virtual carriers and
+The normal standalone allocation uses 43 shared invisible virtual carriers and
 has zero color fallbacks. Exact Polymer model allocation is deliberately
 non-fatal under a combined-mod state-pool shortage: an exhausted model falls
 back to the nearest vanilla color with the same geometry/properties, retains
@@ -342,17 +345,21 @@ carrier contention cannot prevent the combined server from starting.
 
 - Loader-aware JUnit asserts server-only metadata, all 240 item overlays,
   per-color Loom-compatible dye/banner carriers, non-nestable shulker carriers,
-  all 256 block overlays and every state mapping, dry/waterlogged carrier
-  geometry and sharing, bed renderer-compensated yaw, deterministic fallback
-  accounting, schema-scoped outbound component safety, Sky/Ash merge ordering,
-  patterned-banner special-model JSON, real-`Connection` block-entity packet
-  sanitization, entity metadata, Polymer creative ordering,
-  particles/sound/maps, and every generated virtual model.
+  all 256 textured block overlays and every state mapping, preservation of
+  every requested carrier through Polymer's real default mapper,
+  dry/waterlogged carrier geometry and sharing, bed renderer-compensated yaw,
+  deterministic fallback accounting, schema-scoped outbound component safety,
+  Sky/Ash merge ordering, all-banner special-model JSON, non-occluding glass,
+  exact carpet/candle collision parity, precombined pane masks, exact plain-banner
+  composites, shulker openness frames and transparent special-renderer bases,
+  real-`Connection` block-entity packet sanitization, entity metadata, Polymer
+  creative ordering, particles/sound/maps, and every generated virtual model.
 - Server GameTests cover the baseline gameplay/data contract, Loom acceptance
   and banner-item type safety for every custom color, exact outbound-to-real
   Polymer item round trips, patterned item/standing/wall banner model selection
   and block-entity add/remove updates, non-loading banner lookup during chunk
-  reconstruction, candle auto-tick and vanilla flame offsets, and the custom
+  reconstruction, shulker lid animation/server collision/display lighting,
+  candle auto-tick and vanilla flame offsets, and the custom
   sheep coat lifecycle, including shearing, regrowth, and entity-removal
   cleanup.
 - Combined `runServer` startup, Polymer pack generation, and a connected
@@ -377,9 +384,14 @@ Fabric API. Copy `_My_Assets/options.txt` into the instance before testing.
 - [ ] Place, rotate, break, and recover representative custom full blocks,
   glazed terracotta, baskets, carpets, panes, candles, beds, shulkers, and both
   banner forms. Check drops and nearby vanilla controls; inspect all four bed
-  facings and both halves.
-- [ ] Connect panes in several masks and waterlog panes/candles. Water must be
-  visible and behave normally; dry controls must stay dry. Light/extinguish
+  facings and both halves. Carpet selection and movement collision must match a
+  vanilla carpet rather than string or a pressure plate.
+- [ ] Connect panes in several masks and waterlog panes/candles. Pane posts and
+  arms must remain centered on the carrier outline. Water must be visible and
+  behave normally; dry controls must stay dry. Place glass over opaque terrain
+  and confirm the ground face remains rendered instead of becoming an x-ray.
+  Candle selection and movement collision must match vanilla for all four
+  candle counts. Light/extinguish
   one-to-four candles and candle cakes and observe the exact lit model,
   flame/smoke, ambient sound, and the unlit negative case. Compare one versus
   four custom candles and vanilla candles: light levels must remain 3/6/9/12
@@ -387,11 +399,15 @@ Fabric API. Copy `_My_Assets/options.txt` into the instance before testing.
 - [ ] In a Loom, combine representative custom dyes and banners, add multiple
   patterns, duplicate a patterned banner, wash it in a cauldron, and place it
   standing and on a wall. Layers must appear and update/remove without a raw
-  color or crash; an unpatterned banner must retain its exact custom base model.
-  Patterned cloth uses the documented fixed wave phase on the item-display path.
+  color or crash. Plain banners must retain the exact custom base color over
+  vanilla pole/cloth geometry; patterned banners use the documented safe nearest
+  base/layer colors. Cloth uses a fixed wave phase on the item-display path.
 - [ ] Fill, name, place, open, close, break, dispense, and cauldron-wash a
-  custom shulker. Contents must survive and the item must be rejected from
-  shulker-box slots and bundles; compare with a vanilla shulker.
+  custom shulker. Its lid must visibly animate without turning black or exposing
+  a filled/water-textured base model through the opened lid, and its
+  authoritative expanding collision must push/block entities like vanilla.
+  Contents must survive and the item must be rejected from shulker-box slots
+  and bundles; compare with a vanilla shulker.
 - [ ] Dye, shear, and regrow a sheep; dye wolf and cat collars; equip a llama
   with custom carpet; place/use beds and let a villager claim one. Verify exact
   sheep/llama/bed models and the documented safe nearest collar tint.
@@ -414,17 +430,19 @@ the 16 built-in colors; server state, interactions, recipes, drops, storage,
 and data remain exact:
 
 - A vanilla client cannot decode the 16 extended colors in banner-pattern,
-  sign-text-color, collar-color, or map-decoration enum fields. Unpatterned
-  custom banner bases are exact. Patterned banner items and placed banners use
-  a ground/wall vanilla special renderer so every layer remains visible, but
-  their base and extended layer colors, plus sign/collar/map tints, use a safe
-  nearest vanilla color where the protocol field must be sent. The patterned
-  special renderer is carried by an item display, so its cloth uses a fixed
+  sign-text-color, collar-color, or map-decoration enum fields. Plain placed
+  banners retain their exact custom base through a model overlay on the
+  ground/wall vanilla special renderer. Once patterns are present, the base and
+  extended layer colors use safe nearest vanilla colors so every layer remains
+  visible and codec-safe; sign/collar/map tints have the same wire limitation.
+  The special renderer is carried by an item display, so its cloth uses a fixed
   wave phase rather than the client block-entity renderer's time-varying wave.
-- The exact custom shulker model is visible and all storage/open-close behavior
-  remains server-authoritative, but this implementation keeps its lid static.
-  Emulating that cosmetic motion would require a dedicated multipart virtual
-  display with ticked transforms rather than a safe wire-codec substitution.
+- Custom shulkers use the vanilla special renderer and authored texture, with
+  their real progress quantized to 11 visual openness frames. The server retains
+  exact expanding collision and entity pushing. The invisible vanilla-client
+  carrier itself stays a closed full cube, so client-side collision prediction
+  for the protruding lid is corrected by the authoritative server rather than
+  encoded as an extra visible carrier block.
 - The removed custom eight-sprite poof provider cannot run on a vanilla client;
   the replacement is an exact-RGB vanilla dust particle rather than the legacy
   rotating sprite animation.
