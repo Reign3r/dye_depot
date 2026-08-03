@@ -5,14 +5,18 @@ import com.ninni.dye_depot.registry.DDDyes;
 import eu.pb4.polymer.resourcepack.api.PolymerResourcePackUtils;
 import eu.pb4.polymer.resourcepack.api.ResourcePackBuilder;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Base64;
 import javax.imageio.ImageIO;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.util.ARGB;
+import net.minecraft.world.item.DyeColor;
 
 final class DDPolymerPack {
+    private static final String BANNER_PATTERN_BASE_TEXTURE = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAb1BMVEUAAAD29vb19fX09PTz8/Py8vLx8fHw8PDv7+/u7u7t7e3s7Ozr6+vq6urp6eno6Ojn5+fm5ubl5eXk5OTj4+Pi4uLh4eHg4ODf39/e3t7d3d3c3Nzb29va2trZ2dnY2NjX19fW1tbV1dXU1NTR0dGcBdnnAAAAAXRSTlMAQObYZgAAAnhJREFUeNrt0tutHckRRNEV2X0PyXmYIP+tkgH6F0CJ91SGDBg29D/gNmAhK1DxO0nbwSw0f75vm4J01qx/+Wn5x4/vs+++mlrvz/u+5mtf859MO9XbFeX+p591832n/eycOfc6x3yZ69+9fkxV9kTxh582daY7k0Ywo6ubc9MGredmD+7qhYK+ewW53NSFxDPQGD6haE5VHBGh2vYB8Dll9UoZRLNRER1EOA/AghW5ZouyPwbQnktKnoDRLsKaYRkAVAn1AFzppRcUjGQLkAqV5AH4b9WiOwjsXgBArvfb8wZLqBO6Zc8PCATh4+oD8Bc5TD8aKh2QxhOwUAUxYE9FEFDnEYgC3ApIg1KxFNfjBUFhAZgCihrPT5gRE6gFHApVUOIB6GfEG8YABgxAceYBuO8I0IU6wIYQoB6Ak4RoBBAxFAA8/oMCDABqCUDFY6MwAQtxArvK/x1RoLAu0FOIY5iALp4BBdDNayiAEM8XZAsUALuNAADzAOxbACksbEYVoPR5xADCAWpDJtNaJOQByMf+RV9tp3BRQT0BKQABzuQEOMTCPgAVG5QUMFKI1BulD0CQMCiHq9ftIwL0tiLXI1BQegVXc11QJVI3uo/A6GrozoZyf9SSLjKLPAF3IZDSlfZ8q1KigPsB8PVFGp3SiXNHKowc2havByCHrLITaV3NoAwkmXpsZukQ08jg/moX3tqUTvvytMFv95e71DY05pW7vx8VUWjaJ2DyajehH1XpteotYcv1PviWZ2D+/PpKSZi5Xx/fZH776BwrcFU+bj/tPpv3fZ2kvNJzPu/94/j88rU/7JzLJV+++P72q1/96le/+vv3P5ALggAsEXoXAAAAAElFTkSuQmCC";
     private static final String BROWN_SHULKER_TEXTURE = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAk1BMVEUAAABWNBtiPCBdOR5nQCJbOB1eOh5iPSBzSChyRyhwRidmPyJsQyVrQiR0SCllPyLh6Kjm8K26tnnHw41vRSasqGuzr3HT1ZoAAAD///9fOx9RMRllPiFkPiFpQSNJLBVUMxpYNhtRMRhMLRZ4TCtJKxVkPSFNLhdhPB9bNx1tRCVuRCZ3SytYNRtKLBZOLxdIKxXmwgISAAAAAXRSTlMAQObYZgAAA2BJREFUeNrlU9mWmzAMBSRvmJCkme7tNMsMYXOd//+6SjaBmbTnTCEPfegF2b6SfGX72MktVNcp1bZVTUb9l5RwjYXxW2gFIEqBCGQS1M2MtwU6icYg21prK+vZAgqNznOtteEG3WyBGvWA0hiDLpmLlrdA00ODUs0W6AB1qR+0zkkDIZstoDA3Jv7aaEwXCDxoQm60XngGgDSVJnNrYf4ZFMLqiHAG9YIt0MwHExU0ugUCpdEll9fLLlIHa50jsuUahZot0DYCLTSIUi57TFLVzmXKuVqlLsvcm89ZdX2rir5THVnbY9USj2P2YejbJ/a1MR5zmVfdE/LVlRgNsEHXggXbIKwheBzFBYKVlpmwFB9yIcxySU9eYwVqyiJTPfkNj2OvnqjPUVJcYIiTkg4cAufXxzdf86dNqGgMjzU36Fpp48UMsBRf86AsyRfuibI65pt48yo7PGZyPiBkCnVJJAqiIE7VQpR6yue7H+uZMteARSuYm+gBXBW8Il4i15G46iTmJBlLEk96hLAkU/KKZNZboc1QQluR9WupAwzloFScH98q+RAyXkGxKopgYc/iyleBd4CREAzHZeTcmBxdUlm9Sgb0Yc+veYWmuPInFEpZPXFeAYIdHT2sVwg4caqG8iW3BeWvRgHgM7ByUlxD1qOcEsK9EJMAn8EaxjiNVfIIakpYVQ5BTQmPzKupwKPao1DFFFcu+RPSATy+3CCZi4u/4sjNEgH6RiwV8AP+RiC9oVEg1r9HwBPuE6D6d67gXwsQ7hJg3CMwwC+6SMeLH7HwJk5YJvASbwgsfs6ZygJGTg5V12rkhJq+kddTfnSAABAiHbmAV1wBsGeKS9GE+JTAaPZjQiOaBl4JCiHghaAEwfFJMZR4OYEk5MRJjjAWqImOgv5AmyEHaUDlvD874gL4a74f/FfvaMcQJsA354+e48CKDVD8mLiTl/6nB7KGbH848Xi09MD9Dy+CnSge8qZ44qkdvuOJMvwwHnzETyEy8DPFSesU7fjDJ4f0/OxT/3wm8+n54vbny5l8V3Pk8xxjvvfPh+D3nBN8ScRms91uNrvd+/e7XbIEmy3hHoFtwH8qwOf/CpsBM87/BnMF3v2GDwEztsD4/Gm7/fQ5jj8GzBTY7fgI7xDYBiwR+AWG6pMBRobdXQAAAABJRU5ErkJggg==";
 
     private DDPolymerPack() {
@@ -33,16 +37,13 @@ final class DDPolymerPack {
 
     private static void addVanillaSafeModels(ResourcePackBuilder builder) {
         addDonorCarrierModels(builder);
+        addBannerCarrierModels(builder);
         for (DDDyes dye : DDDyes.values()) {
             String color = dye.getName();
             String safeColor = DDPolymerColors.vanillaColor(dye.get()).getName();
-            addItemDefinition(builder, color + "_banner", "dye_depot:item/polymer/" + color + "_banner");
             addPatternedBannerDefinition(builder, "polymer/" + color + "_banner_patterned", safeColor, "ground");
-            addPatternedBannerDefinition(builder, "polymer/" + color + "_wall_banner_patterned", safeColor, "wall");
-            addExactBannerDefinition(builder, "polymer/" + color + "_banner_plain", safeColor, "ground", color + "_banner_exact");
-            addExactBannerDefinition(builder, "polymer/" + color + "_wall_banner_plain", safeColor, "wall", color + "_wall_banner_exact");
+            addPatternedBannerDefinition(builder, color + "_banner", safeColor, "ground");
             addItemDefinition(builder, "polymer/" + color + "_sheep_wool", "dye_depot:item/polymer/" + color + "_sheep_wool");
-            addItemDefinition(builder, "polymer/" + color + "_wall_banner", "dye_depot:block/polymer/" + color + "_wall_banner");
             addItemDefinition(builder, "polymer/" + color + "_carpet", "dye_depot:block/" + color + "_carpet");
             addItemDefinition(builder, "polymer/" + color + "_bed_head", "dye_depot:block/" + color + "_bed_head");
             addItemDefinition(builder, "polymer/" + color + "_bed_foot", "dye_depot:block/" + color + "_bed_foot");
@@ -75,28 +76,21 @@ final class DDPolymerPack {
             copyShulkerTextureToBlockAtlas(builder, color);
 
             builder.addStringData(
-                    "assets/dye_depot/models/item/polymer/" + color + "_banner.json",
-                    "{\"parent\":\"dye_depot:block/polymer/" + color + "_banner\"}"
-            );
-            builder.addStringData(
                     "assets/dye_depot/models/item/polymer/" + color + "_sheep_wool.json",
                     sheepCoatModel(color)
             );
-            builder.addStringData(
-                    "assets/dye_depot/models/block/polymer/" + color + "_banner.json",
-                    standingBannerModel(color)
-            );
-            builder.addStringData(
-                    "assets/dye_depot/models/block/polymer/" + color + "_wall_banner.json",
-                    wallBannerModel(color)
-            );
-            builder.addStringData(
-                    "assets/dye_depot/models/block/polymer/" + color + "_banner_exact.json",
-                    exactBannerClothModel(color, false)
-            );
-            builder.addStringData(
-                    "assets/dye_depot/models/block/polymer/" + color + "_wall_banner_exact.json",
-                    exactBannerClothModel(color, true)
+        }
+    }
+
+    private static void addBannerCarrierModels(ResourcePackBuilder builder) {
+        // A client-only first pattern covers the nearest-color native base on
+        // custom banners while retaining the native pole, geometry, sway, and
+        // authored layers. Vanilla banners keep their untouched native base.
+        for (DDDyes dye : DDDyes.values()) {
+            DyeColor color = dye.get();
+            builder.addData(
+                    "assets/dye_depot/textures/entity/banner/polymer_base_" + color.getName() + ".png",
+                    tintedBannerPatternTexture(color)
             );
         }
     }
@@ -183,6 +177,40 @@ final class DDPolymerPack {
         }
     }
 
+    private static byte[] tintedBannerPatternTexture(DyeColor color) {
+        try {
+            BufferedImage source = ImageIO.read(new ByteArrayInputStream(
+                    Base64.getDecoder().decode(BANNER_PATTERN_BASE_TEXTURE)
+            ));
+            BufferedImage output = new BufferedImage(source.getWidth(), source.getHeight(), BufferedImage.TYPE_INT_ARGB);
+            int tint = color.getTextureDiffuseColor();
+            int white = DyeColor.WHITE.getTextureDiffuseColor();
+            for (int y = 0; y < source.getHeight(); y++) {
+                for (int x = 0; x < source.getWidth(); x++) {
+                    int pixel = source.getRGB(x, y);
+                    int alpha = ARGB.alpha(pixel);
+                    if (alpha == 0) {
+                        continue;
+                    }
+                    int red = compensateWhiteTint(ARGB.red(pixel), ARGB.red(tint), ARGB.red(white));
+                    int green = compensateWhiteTint(ARGB.green(pixel), ARGB.green(tint), ARGB.green(white));
+                    int blue = compensateWhiteTint(ARGB.blue(pixel), ARGB.blue(tint), ARGB.blue(white));
+                    output.setRGB(x, y, ARGB.color(alpha, red, green, blue));
+                }
+            }
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            ImageIO.write(output, "png", bytes);
+            return bytes.toByteArray();
+        } catch (IOException exception) {
+            throw new IllegalStateException("Could not generate banner base pattern for " + color.getName(), exception);
+        }
+    }
+
+    private static int compensateWhiteTint(int source, int tint, int white) {
+        int desired = Math.round(source * tint / 255.0f);
+        return Math.min(255, Math.round(desired * 255.0f / white));
+    }
+
     private static void addItemDefinition(ResourcePackBuilder builder, String path, String model) {
         builder.addStringData(
                 "assets/dye_depot/items/" + path + ".json",
@@ -199,21 +227,6 @@ final class DDPolymerPack {
         builder.addStringData(
                 "assets/dye_depot/items/" + path + ".json",
                 "{\"model\":" + bannerSpecialComponent(safeColor, attachment) + "}"
-        );
-    }
-
-    private static void addExactBannerDefinition(
-            ResourcePackBuilder builder,
-            String path,
-            String safeColor,
-            String attachment,
-            String exactModel
-    ) {
-        builder.addStringData(
-                "assets/dye_depot/items/" + path + ".json",
-                "{\"model\":{\"type\":\"minecraft:composite\",\"models\":[" +
-                        bannerSpecialComponent(safeColor, attachment) +
-                        ",{\"type\":\"minecraft:model\",\"model\":\"dye_depot:block/polymer/" + exactModel + "\"}]}}"
         );
     }
 
@@ -343,38 +356,8 @@ final class DDPolymerPack {
         elements.append(',').append(element);
     }
 
-    private static String standingBannerModel(String color) {
-        String cloth = "dye_depot:block/" + color + "_wool";
-        return modelWithPole(cloth,
-                box(7.5, 0, 7.5, 8.5, 16, 8.5, "#pole") + "," +
-                box(3, 14, 7.25, 13, 15, 8.75, "#pole") + "," +
-                box(3, 2, 7.6, 13, 14, 8.4, "#cloth")
-        );
-    }
-
-    private static String exactBannerClothModel(String color, boolean wall) {
-        String cloth = "dye_depot:block/" + color + "_wool";
-        String element = wall
-                ? box(1.25, -13.25, 1.55, 14.75, 13.9, 2.45, "#cloth")
-                : box(1.25, 2.5, 8.55, 14.75, 29.5, 9.45, "#cloth");
-        return "{\"ambientocclusion\":false,\"textures\":{\"particle\":\"" + cloth +
-                "\",\"cloth\":\"" + cloth + "\"},\"elements\":[" + element + "]}";
-    }
-
-    private static String wallBannerModel(String color) {
-        String cloth = "dye_depot:block/" + color + "_wool";
-        return modelWithPole(cloth,
-                box(3, 14, 14.5, 13, 15, 16, "#pole") + "," +
-                box(3, 2, 15.2, 13, 14, 16, "#cloth")
-        );
-    }
-
     private static String model(String texture, String elements) {
         return "{\"textures\":{\"particle\":\"" + texture + "\",\"wool\":\"" + texture + "\"},\"elements\":[" + elements + "]}";
-    }
-
-    private static String modelWithPole(String cloth, String elements) {
-        return "{\"textures\":{\"particle\":\"" + cloth + "\",\"cloth\":\"" + cloth + "\",\"pole\":\"minecraft:block/oak_planks\"},\"elements\":[" + elements + "]}";
     }
 
     private static String box(double fromX, double fromY, double fromZ, double toX, double toY, double toZ, String texture) {

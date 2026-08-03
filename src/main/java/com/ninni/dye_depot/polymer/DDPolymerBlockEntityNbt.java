@@ -5,6 +5,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.entity.BlockEntityTypes;
 
@@ -21,6 +22,39 @@ public final class DDPolymerBlockEntityNbt {
             return sanitizeSignText(original);
         }
         return original;
+    }
+
+    /** Adds a client-only full-cloth layer without changing the server block entity. */
+    public static CompoundTag withBannerBase(CompoundTag original, DyeColor baseColor) {
+        if (!DDDyes.isModDye(baseColor)) {
+            return original;
+        }
+
+        ListTag patterns = new ListTag();
+        Tag originalPatterns = original.get("patterns");
+        if (originalPatterns instanceof ListTag list) {
+            for (Tag entry : list) {
+                if (!isPolymerBase(entry)) {
+                    patterns.add(entry.copy());
+                }
+            }
+        }
+
+        CompoundTag base = new CompoundTag();
+        base.putString("pattern", DDPolymerBannerBases.patternId(baseColor).toString());
+        base.putString("color", DyeColor.WHITE.getName());
+        patterns.addFirst(base);
+
+        CompoundTag changed = original.copy();
+        changed.put("patterns", patterns);
+        return changed;
+    }
+
+    private static boolean isPolymerBase(Tag entry) {
+        if (entry instanceof CompoundTag pattern && pattern.get("pattern") instanceof StringTag id) {
+            return id.value().startsWith("dye_depot:polymer_base_");
+        }
+        return false;
     }
 
     private static CompoundTag sanitizeSignText(CompoundTag original) {

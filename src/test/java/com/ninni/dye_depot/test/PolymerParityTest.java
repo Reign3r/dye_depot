@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -75,9 +76,11 @@ import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.item.component.TypedEntityData;
 import net.minecraft.world.level.EmptyBlockGetter;
+import net.minecraft.world.level.block.BannerBlock;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.WallBannerBlock;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.entity.BlockEntityTypes;
 import net.minecraft.world.level.block.state.properties.BedPart;
@@ -291,13 +294,27 @@ class PolymerParityTest {
                 DDPolymerBlocks.polymerState(block.defaultBlockState()).getBlock(),
                 block.toString()
         ));
+        DDBlocks.BANNERS.forEach((color, holder) ->
+                holder.value().getStateDefinition().getPossibleStates().forEach(state -> {
+                    var carrier = DDPolymerBlocks.polymerState(state);
+                    assertSame(Blocks.BANNER.pick(DDPolymerColors.vanillaColor(color)), carrier.getBlock(), state.toString());
+                    assertEquals(state.getValue(BannerBlock.ROTATION), carrier.getValue(BannerBlock.ROTATION), state.toString());
+                })
+        );
+        DDBlocks.WALL_BANNERS.forEach((color, holder) ->
+                holder.value().getStateDefinition().getPossibleStates().forEach(state -> {
+                    var carrier = DDPolymerBlocks.polymerState(state);
+                    assertSame(Blocks.WALL_BANNER.pick(DDPolymerColors.vanillaColor(color)), carrier.getBlock(), state.toString());
+                    assertEquals(state.getValue(WallBannerBlock.FACING), carrier.getValue(WallBannerBlock.FACING), state.toString());
+                })
+        );
         assertNotNull(BlockWithElementHolder.get(Blocks.STAINED_GLASS_PANE.pick(DyeColor.BROWN).defaultBlockState()));
         assertNotNull(BlockWithElementHolder.get(Blocks.DYED_SHULKER_BOX.pick(DyeColor.BROWN).defaultBlockState()));
     }
 
     @Test
     void virtualBlocksUseSharedTargetableGeometryCarriersWithoutPoolFallbacks() {
-        assertEquals(10, DDPolymerBlocks.virtualCarrierCount());
+        assertEquals(9, DDPolymerBlocks.virtualCarrierCount());
         assertEquals(0, DDPolymerBlocks.cosmeticFallbackCount());
 
         for (var family : List.of(
@@ -457,6 +474,37 @@ class PolymerParityTest {
             assertEquals(snapshot, unrelated, "unrelated typed data must retain byte/tag equality");
             assertTrue(sign.toString().contains(dye.getName()), "sanitization must not mutate server state");
         }
+    }
+
+    @Test
+    void outboundBannerTagsPrependAnExactVisualBaseWithoutMutatingServerPatterns() {
+        for (DDDyes dye : DDDyes.values()) {
+            CompoundTag original = coloredTag(dye.get());
+            CompoundTag outbound = DDPolymerBlockEntityNbt.withBannerBase(original, dye.get());
+
+            assertEquals(1, ((ListTag) original.get("patterns")).size(), dye.getName());
+            ListTag layers = (ListTag) outbound.get("patterns");
+            assertEquals(2, layers.size(), dye.getName());
+            CompoundTag base = (CompoundTag) layers.getFirst();
+            assertEquals("dye_depot:polymer_base_" + dye.getName(), stringField(base, "pattern"));
+            assertEquals(DyeColor.WHITE.getName(), stringField(base, "color"));
+            assertEquals(dye.getName(), stringField((CompoundTag) layers.get(1), "color"));
+
+            CompoundTag safe = DDPolymerBlockEntityNbt.sanitize(BlockEntityTypes.BANNER, outbound);
+            ListTag safeLayers = (ListTag) safe.get("patterns");
+            assertEquals(DyeColor.WHITE.getName(), stringField((CompoundTag) safeLayers.getFirst(), "color"));
+            assertEquals(
+                    DDPolymerColors.vanillaColor(dye.get()).getName(),
+                    stringField((CompoundTag) safeLayers.get(1), "color")
+            );
+        }
+
+        CompoundTag vanilla = coloredTag(DyeColor.RED);
+        assertSame(
+                vanilla,
+                DDPolymerBlockEntityNbt.withBannerBase(vanilla, DyeColor.RED),
+                "vanilla banners retain their native base and do not consume a pattern layer"
+        );
     }
 
     @Test
@@ -669,6 +717,25 @@ class PolymerParityTest {
             assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/donor_brown_shulker_base.json"));
             assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/donor_brown_shulker_lid.json"));
             assertNotNull(zip.getEntry("assets/dye_depot/textures/block/polymer/shulker_donor_brown.png"));
+
+            assertNull(
+                    zip.getEntry("assets/minecraft/textures/entity/banner/base.png"),
+                    "the native base texture must stay untouched for exact vanilla banners and Loom capacity"
+            );
+            for (String color : ResourceTestSupport.CUSTOM_COLORS) {
+                String texturePath = "assets/dye_depot/textures/entity/banner/polymer_base_" + color + ".png";
+                var texture = ImageIO.read(zip.getInputStream(zip.getEntry(texturePath)));
+                assertEquals(64, texture.getWidth(), texturePath);
+                assertEquals(64, texture.getHeight(), texturePath);
+                assertTrue(hasVisiblePixel(texture), texturePath);
+
+                JsonObject pattern = ResourceTestSupport.json(
+                        "data/dye_depot/banner_pattern/polymer_base_" + color + ".json"
+                );
+                assertEquals("dye_depot:polymer_base_" + color, pattern.get("asset_id").getAsString());
+                assertEquals("block.minecraft.banner.base", pattern.get("translation_key").getAsString());
+            }
+
             for (String color : ResourceTestSupport.CUSTOM_COLORS) {
                 assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/" + color + "_shulker_base.json"));
                 assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/" + color + "_shulker_lid.json"));
@@ -728,20 +795,14 @@ class PolymerParityTest {
                 String bannerPath = "assets/dye_depot/items/" + color + "_banner.json";
                 String bannerJson = read(zip, bannerPath);
                 JsonObject banner = JsonParser.parseString(bannerJson).getAsJsonObject();
-                assertEquals(
-                        "minecraft:model",
-                        banner.getAsJsonObject("model").get("type").getAsString(),
-                        bannerPath
-                );
-                assertFalse(bannerJson.contains("minecraft:banner"), bannerPath);
                 assertFalse(bannerJson.contains("\"color\":\"" + color + "\""), bannerPath);
 
                 String safeColor = DDPolymerColors.vanillaColor(
                         DDDyes.valueOf(color.toUpperCase(Locale.ROOT)).get()
                 ).getName();
                 for (var patterned : Map.of(
-                        "assets/dye_depot/items/polymer/" + color + "_banner_patterned.json", "ground",
-                        "assets/dye_depot/items/polymer/" + color + "_wall_banner_patterned.json", "wall"
+                        bannerPath, "ground",
+                        "assets/dye_depot/items/polymer/" + color + "_banner_patterned.json", "ground"
                 ).entrySet()) {
                     JsonObject definition = JsonParser.parseString(read(zip, patterned.getKey())).getAsJsonObject();
                     JsonObject model = definition.getAsJsonObject("model");
@@ -753,20 +814,6 @@ class PolymerParityTest {
                     assertEquals(patterned.getValue(), special.get("attachment").getAsString(), patterned.getKey());
                 }
 
-                for (var plain : Map.of(
-                        "assets/dye_depot/items/polymer/" + color + "_banner_plain.json", "ground",
-                        "assets/dye_depot/items/polymer/" + color + "_wall_banner_plain.json", "wall"
-                ).entrySet()) {
-                    JsonObject definition = JsonParser.parseString(read(zip, plain.getKey())).getAsJsonObject();
-                    JsonObject model = definition.getAsJsonObject("model");
-                    assertEquals("minecraft:composite", model.get("type").getAsString(), plain.getKey());
-                    var models = model.getAsJsonArray("models");
-                    assertEquals("minecraft:special", models.get(0).getAsJsonObject().get("type").getAsString(), plain.getKey());
-                    assertEquals(plain.getValue(), models.get(0).getAsJsonObject().getAsJsonObject("model").get("attachment").getAsString(), plain.getKey());
-                    assertEquals("minecraft:model", models.get(1).getAsJsonObject().get("type").getAsString(), plain.getKey());
-                    assertTrue(models.get(1).getAsJsonObject().get("model").getAsString().contains(color), plain.getKey());
-                }
-
                 for (String path : List.of(
                         "assets/minecraft/equipment/" + color + "_carpet.json",
                         "assets/dye_depot/textures/entity/equipment/llama_body/" + color + ".png",
@@ -774,12 +821,7 @@ class PolymerParityTest {
                         "assets/dye_depot/items/polymer/" + color + "_carpet.json",
                         "assets/dye_depot/items/polymer/" + color + "_pane_0.json",
                         "assets/dye_depot/models/block/polymer/" + color + "_pane_0.json",
-                        "assets/dye_depot/models/item/polymer/" + color + "_sheep_wool.json",
-                        "assets/dye_depot/models/item/polymer/" + color + "_banner.json",
-                        "assets/dye_depot/models/block/polymer/" + color + "_banner.json",
-                        "assets/dye_depot/models/block/polymer/" + color + "_wall_banner.json",
-                        "assets/dye_depot/models/block/polymer/" + color + "_banner_exact.json",
-                        "assets/dye_depot/models/block/polymer/" + color + "_wall_banner_exact.json"
+                        "assets/dye_depot/models/item/polymer/" + color + "_sheep_wool.json"
                 )) {
                     assertNotNull(zip.getEntry(path), path);
                 }

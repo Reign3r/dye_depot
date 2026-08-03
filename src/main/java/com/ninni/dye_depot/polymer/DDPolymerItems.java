@@ -28,8 +28,12 @@ final class DDPolymerItems {
     static void register() {
         // This global final pass also protects vanilla containers carrying Dye
         // Depot items or block-entity data.
-        PolymerItemUtils.ITEM_MODIFICATION_EVENT.register((original, client, context) ->
-                DDPolymerItemSanitizer.sanitize(client));
+        PolymerItemUtils.ITEM_MODIFICATION_EVENT.register((original, client, context) -> {
+            var registries = context.get(PacketContext.REGISTRY_ACCESS);
+            return registries == null
+                    ? DDPolymerItemSanitizer.sanitize(client)
+                    : DDPolymerItemSanitizer.sanitize(original, client, registries, context);
+        });
 
         for (Item item : BuiltInRegistries.ITEM) {
             Identifier id = BuiltInRegistries.ITEM.getKey(item);
@@ -76,10 +80,9 @@ final class DDPolymerItems {
             if (carrier instanceof net.minecraft.world.item.BannerItem
                     && patterns != null
                     && !patterns.layers().isEmpty()) {
-                // The authored static model preserves an exact custom base but
-                // cannot render dynamic layers. Patterned banners use a safe
-                // vanilla banner special renderer generated for this color;
-                // the outbound sanitizer also makes every layer codec-safe.
+                // Both definitions use the native banner special renderer. The
+                // outbound copy prepends its exact base as a hidden visual
+                // pattern and makes every authored layer codec-safe.
                 return DyeDepot.modLoc("polymer/" + BuiltInRegistries.ITEM.getKey(source).getPath() + "_patterned");
             }
             return sourceModel;
@@ -92,7 +95,7 @@ final class DDPolymerItems {
                 PacketContext context,
                 HolderLookup.Provider registries
         ) {
-            DDPolymerItemSanitizer.sanitize(polymer);
+            DDPolymerItemSanitizer.sanitize(original, polymer, registries, context);
         }
 
         @Override

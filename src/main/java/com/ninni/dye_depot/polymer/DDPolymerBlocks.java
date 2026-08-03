@@ -35,7 +35,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.LightLayer;
-import net.minecraft.world.level.block.BannerBlock;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -44,7 +43,6 @@ import net.minecraft.world.level.block.CandleCakeBlock;
 import net.minecraft.world.level.block.GlazedTerracottaBlock;
 import net.minecraft.world.level.block.ShulkerBoxBlock;
 import net.minecraft.world.level.block.StainedGlassPaneBlock;
-import net.minecraft.world.level.block.WallBannerBlock;
 import net.minecraft.world.level.block.entity.BannerBlockEntity;
 import net.minecraft.world.level.block.entity.BannerPatternLayers;
 import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
@@ -323,30 +321,17 @@ public final class DDPolymerBlocks {
 
     private static void registerBanner(Block block, DyeColor color) {
         BlockState nearest = Blocks.BANNER.pick(DDPolymerColors.vanillaColor(color)).defaultBlockState();
-        registerVirtual(block,
-                state -> emptyOrFallback(BlockModelType.VINES, copySharedProperties(state, nearest), block),
+        register(block,
                 state -> copySharedProperties(state, nearest),
-                state -> displayStack(block.asItem(), "polymer/" + color.getName() + "_banner_plain"),
-                state -> state.getValue(BannerBlock.ROTATION) * 22.5f,
-                state -> false,
-                state -> List.of(),
-                "polymer/" + color.getName() + "_banner_patterned",
-                null
+                state -> copySharedProperties(state, nearest)
         );
     }
 
     private static void registerWallBanner(Block block, DyeColor color) {
-        Item bannerItem = DDBlocks.BANNERS.getOrThrow(color).asItem();
         BlockState nearest = Blocks.WALL_BANNER.pick(DDPolymerColors.vanillaColor(color)).defaultBlockState();
-        registerVirtual(block,
-                state -> emptyOrFallback(BlockModelType.VINES, copySharedProperties(state, nearest), block),
+        register(block,
                 state -> copySharedProperties(state, nearest),
-                state -> displayStack(bannerItem, "polymer/" + color.getName() + "_wall_banner_plain"),
-                state -> state.getValue(WallBannerBlock.FACING).toYRot(),
-                state -> false,
-                state -> List.of(),
-                "polymer/" + color.getName() + "_wall_banner_patterned",
-                null
+                state -> copySharedProperties(state, nearest)
         );
     }
 

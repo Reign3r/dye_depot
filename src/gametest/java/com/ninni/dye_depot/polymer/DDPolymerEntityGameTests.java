@@ -34,6 +34,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ItemContainerContents;
+import net.minecraft.world.item.component.ItemLore;
+import net.minecraft.world.item.component.TooltipDisplay;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CandleBlock;
@@ -79,6 +81,22 @@ public final class DDPolymerEntityGameTests {
                         .allMatch(layer -> layer.color().getId() < 16),
                 "client-visible banner pattern colors are vanilla-codec safe"
         );
+        helper.assertValueEqual(
+                clientStack.get(DataComponents.BANNER_PATTERNS).layers().getFirst()
+                        .pattern().unwrapKey().orElseThrow().identifier(),
+                DyeDepot.modLoc("polymer_base_maroon"),
+                "client banner prepends its exact full-cloth visual base"
+        );
+        helper.assertTrue(
+                !clientStack.getOrDefault(DataComponents.TOOLTIP_DISPLAY, TooltipDisplay.DEFAULT)
+                        .shows(DataComponents.BANNER_PATTERNS),
+                "the synthetic base is hidden from the normal banner-pattern tooltip"
+        );
+        helper.assertValueEqual(
+                clientStack.getOrDefault(DataComponents.LORE, ItemLore.EMPTY).lines().size(),
+                1,
+                "the authored pattern keeps one visible tooltip line"
+        );
         CompoundTag carrierData = clientStack.get(DataComponents.CUSTOM_DATA).copyTag();
         helper.assertTrue(
                 carrierData.contains(PolymerItemUtils.POLYMER_STACK),
@@ -122,7 +140,17 @@ public final class DDPolymerEntityGameTests {
         helper.assertValueEqual(
                 plainClientStack.get(DataComponents.ITEM_MODEL),
                 DyeDepot.modLoc("maroon_banner"),
-                "unpatterned banner items retain their exact static custom model"
+                "unpatterned banner items use their native animated banner model"
+        );
+        helper.assertValueEqual(
+                plainClientStack.get(DataComponents.BANNER_PATTERNS).layers().getFirst()
+                        .pattern().unwrapKey().orElseThrow().identifier(),
+                DyeDepot.modLoc("polymer_base_maroon"),
+                "plain banner items receive the same exact animated base layer"
+        );
+        helper.assertTrue(
+                plainClientStack.getOrDefault(DataComponents.LORE, ItemLore.EMPTY).lines().isEmpty(),
+                "plain banners do not expose a synthetic tooltip line"
         );
         helper.succeed();
     }
@@ -165,7 +193,69 @@ public final class DDPolymerEntityGameTests {
 
     @GameTest
     @SuppressWarnings("removal")
-    public void placedBannerDisplaysTrackPatternAddRemoveAndWallAttachment(GameTestHelper helper) {
+    public void loomRetainsAllSixAuthoredPatternSlotsForCustomBanners(GameTestHelper helper) {
+        var player = helper.makeMockServerPlayerInLevel();
+        var registries = helper.getLevel().registryAccess();
+        var pattern = registries.lookupOrThrow(Registries.BANNER_PATTERN).getOrThrow(BannerPatterns.CROSS);
+        var color = DDDyes.MAROON.get();
+        var builder = new BannerPatternLayers.Builder();
+        for (int index = 0; index < 5; index++) {
+            builder.add(pattern, color);
+        }
+        var authoredPatterns = builder.build();
+        var serverStack = new ItemStack(DDItems.BANNERS.getOrThrow(color));
+        serverStack.set(DataComponents.BANNER_PATTERNS, authoredPatterns);
+        var loom = new LoomMenu(0, player.getInventory());
+        loom.getBannerSlot().set(serverStack);
+        player.containerMenu = loom;
+        ItemStack loomInput = loom.getBannerSlot().getItem();
+
+        var playerConnection = ((ServerCommonPacketListenerImplAccessor) player.connection).getConnection();
+        var context = playerConnection.getPacketContext();
+        context.set(PacketContextImpl.REGISTRY_ACCESS, registries);
+        context.set(PacketContextImpl.SERVER_INSTANCE, helper.getLevel().getServer());
+        context.set(PacketContextImpl.GAME_PROFILE, player.getGameProfile());
+        ItemStack clientStack = PolymerItemUtils.getPolymerItemStack(loomInput, context, registries);
+
+        var clientPatterns = clientStack.getOrDefault(DataComponents.BANNER_PATTERNS, BannerPatternLayers.EMPTY);
+        helper.assertValueEqual(
+                clientPatterns.layers().size(),
+                5,
+                "five authored layers remain five client layers so the Loom offers a sixth"
+        );
+        helper.assertTrue(
+                clientPatterns.layers().stream().noneMatch(layer -> layer.pattern().unwrapKey()
+                        .map(key -> key.identifier().getNamespace().equals(DyeDepot.MOD_ID))
+                        .orElse(false)),
+                "the Loom-capacity fallback omits the synthetic visual base"
+        );
+        helper.assertValueEqual(
+                loomInput.get(DataComponents.BANNER_PATTERNS),
+                authoredPatterns,
+                "Loom-safe client conversion does not mutate authored server patterns"
+        );
+
+        ItemStack normalClientStack = PolymerItemUtils.getPolymerItemStack(loomInput.copy(), context, registries);
+        helper.assertValueEqual(
+                normalClientStack.getOrDefault(DataComponents.BANNER_PATTERNS, BannerPatternLayers.EMPTY)
+                        .layers().size(),
+                6,
+                "the same five-pattern banner keeps its exact synthetic base outside the Loom input slot"
+        );
+        helper.assertValueEqual(
+                normalClientStack.get(DataComponents.BANNER_PATTERNS).layers().getFirst()
+                        .pattern().unwrapKey().orElseThrow().identifier(),
+                DyeDepot.modLoc("polymer_base_maroon"),
+                "normal five-pattern item icons retain the exact custom base"
+        );
+        loom.removed(player);
+        player.containerMenu = player.inventoryMenu;
+        helper.succeed();
+    }
+
+    @GameTest
+    @SuppressWarnings("removal")
+    public void placedBannersUseNativeCarriersAndExactOutboundBaseLayers(GameTestHelper helper) {
         var level = helper.getLevel();
         var registries = level.registryAccess();
         var color = DDDyes.MAROON.get();
@@ -177,22 +267,16 @@ public final class DDPolymerEntityGameTests {
         var standingState = DDBlocks.BANNERS.getOrThrow(color).defaultBlockState();
         helper.setBlock(standingRelative, standingState);
         var standingEntity = (BannerBlockEntity) level.getBlockEntity(standingPos);
-        var standingAttachment = BlockBoundAttachment.get(level, standingPos);
-        helper.assertTrue(standingAttachment != null, "standing banner has a live Polymer block attachment");
-        var standingHolder = standingAttachment.holder();
-        var standingDisplay = (ItemDisplayElement) standingHolder.getElements().getFirst();
-
-        helper.assertTrue(
-                standingDisplay.getItem().getOrDefault(DataComponents.BANNER_PATTERNS, BannerPatternLayers.EMPTY)
-                        .layers().isEmpty(),
-                "unpatterned placed banners start on the exact static model"
-        );
         helper.assertValueEqual(
-                standingDisplay.getItem().get(DataComponents.ITEM_MODEL),
-                DyeDepot.modLoc("polymer/maroon_banner_plain"),
-                "unpatterned standing banner combines native geometry with its exact custom cloth color"
+                DDPolymerBlocks.polymerState(standingState).getBlock(),
+                Blocks.BANNER.pick(DDPolymerColors.vanillaColor(color)),
+                "standing banners use a native targetable banner carrier"
         );
-        ItemStack unwatchedStack = standingDisplay.getItem();
+        helper.assertTrue(
+                BlockBoundAttachment.get(level, standingPos) == null,
+                "native banner rendering does not allocate a duplicate display entity"
+        );
+
         var patternedStanding = new ItemStack(DDItems.BANNERS.getOrThrow(color));
         patternedStanding.set(DataComponents.BANNER_PATTERNS, patterns);
         standingEntity.applyComponentsFromItemStack(patternedStanding);
@@ -202,58 +286,18 @@ public final class DDPolymerEntityGameTests {
                 patterns,
                 "standing banner block entity accepts the added pattern layers"
         );
-        standingHolder.tick();
-        helper.assertTrue(
-                standingDisplay.getItem() == unwatchedStack,
-                "an unwatched banner tick performs no stack allocation or replacement"
-        );
-        helper.assertTrue(
-                standingDisplay.getItem().getOrDefault(DataComponents.BANNER_PATTERNS, BannerPatternLayers.EMPTY)
-                        .layers().isEmpty(),
-                "unwatched banner defers block-entity refresh"
-        );
-
-        var player = helper.makeMockServerPlayerInLevel();
-        var playerConnection = ((ServerCommonPacketListenerImplAccessor) player.connection).getConnection();
-        var context = playerConnection.getPacketContext();
-        context.set(PacketContextImpl.REGISTRY_ACCESS, registries);
-        context.set(PacketContextImpl.SERVER_INSTANCE, level.getServer());
-        context.set(PacketContextImpl.GAME_PROFILE, player.getGameProfile());
-        standingHolder.startWatching(player);
-        helper.assertTrue(
-                !standingHolder.getWatchingPlayers().isEmpty(),
-                "standing banner has a tracked viewer before its deferred refresh"
-        );
-        standingHolder.tick();
+        CompoundTag standingTag = standingEntity.getUpdateTag(registries);
+        var standingLayers = (net.minecraft.nbt.ListTag) standingTag.get("patterns");
+        helper.assertValueEqual(standingLayers.size(), 2, "outbound standing banner keeps base plus authored layer");
         helper.assertValueEqual(
-                standingDisplay.getItem().get(DataComponents.ITEM_MODEL),
-                DyeDepot.modLoc("polymer/maroon_banner_patterned"),
-                "standing patterned banner selects the ground attachment model"
+                ((CompoundTag) standingLayers.getFirst()).getStringOr("pattern", ""),
+                "dye_depot:polymer_base_maroon",
+                "standing banner update tag starts with its exact visual base"
         );
         helper.assertValueEqual(
-                standingDisplay.getItem().get(DataComponents.BANNER_PATTERNS),
+                standingEntity.getPatterns(),
                 patterns,
-                "standing display reads exact block-entity pattern layers"
-        );
-        ItemStack cachedPatternedStack = standingDisplay.getItem();
-        standingHolder.tick();
-        helper.assertTrue(
-                standingDisplay.getItem() == cachedPatternedStack,
-                "unchanged watched patterns reuse the cached display stack"
-        );
-
-        standingEntity.applyComponentsFromItemStack(new ItemStack(DDItems.BANNERS.getOrThrow(color)));
-        standingEntity.setChanged();
-        standingHolder.tick();
-        helper.assertTrue(
-                standingDisplay.getItem().getOrDefault(DataComponents.BANNER_PATTERNS, BannerPatternLayers.EMPTY)
-                        .layers().isEmpty(),
-                "removing block-entity patterns clears the dynamic layers"
-        );
-        helper.assertValueEqual(
-                standingDisplay.getItem().get(DataComponents.ITEM_MODEL),
-                DyeDepot.modLoc("polymer/maroon_banner_plain"),
-                "removing patterns restores the exact custom-color vanilla-style renderer"
+                "client-only visual base never mutates server pattern data"
         );
 
         BlockPos wallRelative = new BlockPos(3, 2, 1);
@@ -263,32 +307,21 @@ public final class DDPolymerEntityGameTests {
         var wallEntity = (BannerBlockEntity) level.getBlockEntity(wallPos);
         wallEntity.applyComponentsFromItemStack(patternedStanding);
         wallEntity.setChanged();
-        var wallAttachment = BlockBoundAttachment.get(level, wallPos);
-        helper.assertTrue(wallAttachment != null, "wall banner has a live Polymer block attachment");
-        var wallHolder = wallAttachment.holder();
-        wallHolder.startWatching(player);
-        wallHolder.tick();
-        var wallDisplay = (ItemDisplayElement) wallHolder.getElements().getFirst();
         helper.assertValueEqual(
-                wallDisplay.getItem().get(DataComponents.ITEM_MODEL),
-                DyeDepot.modLoc("polymer/maroon_wall_banner_patterned"),
-                "wall patterned banner selects the wall attachment model"
+                DDPolymerBlocks.polymerState(wallState).getBlock(),
+                Blocks.WALL_BANNER.pick(DDPolymerColors.vanillaColor(color)),
+                "wall banners use a native wall-banner carrier"
         );
-
-        ItemStack clientWall = PolymerItemUtils.getPolymerItemStack(wallDisplay.getItem(), context, registries);
         helper.assertValueEqual(
-                clientWall.get(DataComponents.ITEM_MODEL),
-                DyeDepot.modLoc("polymer/maroon_wall_banner_patterned"),
-                "explicit wall model survives Polymer item conversion"
+                ((CompoundTag) ((net.minecraft.nbt.ListTag) wallEntity.getUpdateTag(registries).get("patterns"))
+                        .getFirst()).getStringOr("pattern", ""),
+                "dye_depot:polymer_base_maroon",
+                "wall banner update tag starts with the same exact visual base"
         );
         helper.assertTrue(
-                clientWall.get(DataComponents.BANNER_PATTERNS).layers().stream()
-                        .allMatch(layer -> layer.color().getId() < 16),
-                "placed wall banner layers are vanilla-codec safe"
+                BlockBoundAttachment.get(level, wallPos) == null,
+                "wall banners also avoid duplicate display entities"
         );
-
-        standingHolder.destroy();
-        wallHolder.destroy();
         helper.succeed();
     }
 
