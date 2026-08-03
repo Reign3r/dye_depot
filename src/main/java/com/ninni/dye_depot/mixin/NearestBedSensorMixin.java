@@ -1,4 +1,4 @@
-package com.ninni.dye_depot.mixin.client;
+package com.ninni.dye_depot.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -12,7 +12,6 @@ import org.spongepowered.asm.mixin.injection.At;
 
 @Mixin(NearestBedSensor.class)
 public class NearestBedSensorMixin {
-
     @WrapOperation(
             method = "lambda$doTick$1",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/core/Holder;is(Lnet/minecraft/resources/ResourceKey;)Z")
@@ -20,5 +19,4 @@ public class NearestBedSensorMixin {
     private static boolean isHomePoi(Holder<PoiType> instance, ResourceKey<PoiType> key, Operation<Boolean> original) {
         return instance.is(DDTags.BEDS) || original.call(instance, key);
     }
-
 }

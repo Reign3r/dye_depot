@@ -141,6 +141,9 @@ behavior.
   `minecraft:village` includes that combined tag.
 - Villager goal and nearest-bed filters recognize the combined tag, so villagers
   can claim and sleep in custom beds.
+- Polymer marks `dye_depot:home` as a server-only registry entry, keeping its
+  server-side villager behavior without sending an unknown POI type to vanilla
+  clients during Fabric registry synchronization.
 
 ## Llamas
 
@@ -245,6 +248,190 @@ Resources and conditionally loaded data support:
 - The built-in `dye_override` pack is default-enabled and user-disableable. It
   renames light blue to Sky and light gray to Ash across vanilla, Dye Depot, and
   compatible content, and overrides nine vanilla dye icons.
+
+## Fabric 26.2 server-only Polymer parity mapping
+
+The 26.2 branch is a server-only mod. It has no client entrypoint or client
+mixin and requires Polymer Core, Polymer Blocks, Polymer Resource Pack,
+Resource Pack Extras, and Polymer Virtual Entity. The generated Polymer pack is
+required and includes the normal mod assets, generated assets, and the built-in
+Sky/Ash override pack.
+
+### Items, creative inventory, and outbound data
+
+- All 240 registered items have Polymer overlays. Custom dyes and banners use
+  their nearest-color vanilla dye and banner carriers so Loom slot rules and
+  the Loom client's `BannerItem` type requirement remain valid. Custom shulker
+  boxes use nearest-color vanilla shulker carriers so vanilla container and
+  bundle rules still reject nesting them; other items use a neutral vanilla
+  carrier. Unpatterned items retain the original Dye Depot item-model
+  identifier. A patterned banner selects a generated vanilla banner special
+  model so its layers remain visible; its base and extended layer colors are
+  mapped to their nearest codec-safe vanilla colors for that client copy.
+- The Polymer creative tab contains the 240 items exactly once in baseline
+  family/color order. Existing server-side vanilla-tab insertion behavior is
+  retained for compatible clients. The vanilla protocol cannot inject a custom
+  tab into an unmodified client's native creative screen; vanilla users can
+  open the same server-authoritative contents through Polymer's built-in
+  `/polymer creative dye_depot:items` fallback.
+- Every direct item component whose wire value is a `DyeColor` is mapped to a
+  codec-safe vanilla color in the client copy: dye, base color, wolf collar,
+  cat collar, sheep color, shulker color, and both tropical-fish colors.
+- Banner pattern layers and recursively nested container contents receive the
+  same client-copy sanitization. Typed block-entity data dispatches by its
+  known vanilla type: banners sanitize only pattern colors, signs and hanging
+  signs sanitize only front/back text colors, and every other type is retained
+  byte-for-byte without replacing its component. `BUCKET_ENTITY_DATA`,
+  `ENTITY_DATA`, and opaque `CUSTOM_DATA`, including Polymer's reserved original-
+  stack recovery payload, is not rewritten, so client-to-server item round
+  trips retain exact custom colors and user data. The original server stack and
+  its nested contents are not mutated.
+- Live block-entity update packets sanitize those known extended-color fields
+  only while running in a real outbound `PacketContext`; internal server reads
+  retain the exact custom values.
+
+### Blocks
+
+Every state of all 256 registered blocks has a vanilla-protocol block state,
+and the exact authored color/model is supplied by Polymer models or a virtual
+item display as follows:
+
+| Family | Vanilla-client representation |
+|---|---|
+| wool, terracotta, concrete, concrete powder, stained glass | exact resource-pack model on a full-block carrier |
+| glazed terracotta | exact model with state-driven horizontal rotation |
+| dye baskets | exact model with state-driven horizontal rotation |
+| carpets | exact model on a flat tripwire/carpet-shaped carrier |
+| candles | shared invisible dry/waterlogged thin carriers plus exact count/lit display models; tracked lit holders emit vanilla flame/smoke and ambient sound at vanilla offsets/probabilities |
+| candle cakes | one shared invisible bottom-slab carrier plus exact lit/unlit display models |
+| stained-glass panes | 32 shared invisible dry/waterlogged bars carriers for the 16 connection masks plus exact composite display models and client-visible water |
+| beds | eight shared invisible bed carriers for facing and head/foot state plus exact display models; entity yaw compensates for the vanilla item-display renderer transform |
+| shulker boxes | one shared invisible full-block carrier plus an exact special-renderer model |
+| standing banners | one shared invisible targetable vines carrier; exact static base geometry for unpatterned banners, switching to a ground-attached vanilla banner special renderer when the block entity has patterns |
+| wall banners | the shared invisible targetable vines carrier; exact static base wall geometry when unpatterned, switching to a wall-attached vanilla banner special renderer when patterned |
+
+Banner holders inspect block-entity patterns only from an already loaded
+chunk. This preserves patterned visuals while preventing recursive chunk loads
+when holders are reconstructed during server restart.
+
+The normal standalone allocation uses 45 shared invisible virtual carriers and
+has zero color fallbacks. Exact Polymer model allocation is deliberately
+non-fatal under a combined-mod state-pool shortage: an exhausted model falls
+back to the nearest vanilla color with the same geometry/properties, retains
+all server behavior, and is counted and reported at startup. Thus cosmetic
+carrier contention cannot prevent the combined server from starting.
+
+### Entities, particles, sound, and maps
+
+- Sheep remain native sheep to the vanilla client. Their extended five-bit
+  metadata is rewritten to a codec-safe value, while an exact-color virtual
+  wool coat follows color, sheared/regrown, adult/baby, position, and yaw
+  state. Removing a sheep destroys the associated virtual attachment.
+- Cat and wolf collar metadata is mapped to the nearest vanilla client color;
+  the exact custom value remains authoritative on the server. Their packet
+  overlays leave sheep, cat, and wolf as client-visible vanilla registry
+  entries so later vanilla entity IDs cannot shift during registry sync.
+- Dye-basket poofs retain their exact RGB through a vanilla dust-particle
+  overlay. The basket sound has a vanilla-safe Polymer sound overlay.
+- Custom banner map decorations are exposed as the nearest vanilla banner
+  marker so an unknown registry value never reaches a vanilla client.
+- The resource pack contains all 16 llama equipment definitions and textures,
+  preserving custom-carpet llama decor without a client mod.
+
+### Automated Polymer regression coverage
+
+- Loader-aware JUnit asserts server-only metadata, all 240 item overlays,
+  per-color Loom-compatible dye/banner carriers, non-nestable shulker carriers,
+  all 256 block overlays and every state mapping, dry/waterlogged carrier
+  geometry and sharing, bed renderer-compensated yaw, deterministic fallback
+  accounting, schema-scoped outbound component safety, Sky/Ash merge ordering,
+  patterned-banner special-model JSON, real-`Connection` block-entity packet
+  sanitization, entity metadata, Polymer creative ordering,
+  particles/sound/maps, and every generated virtual model.
+- Server GameTests cover the baseline gameplay/data contract, Loom acceptance
+  and banner-item type safety for every custom color, exact outbound-to-real
+  Polymer item round trips, patterned item/standing/wall banner model selection
+  and block-entity add/remove updates, non-loading banner lookup during chunk
+  reconstruction, candle auto-tick and vanilla flame offsets, and the custom
+  sheep coat lifecycle, including shearing, regrowth, and entity-removal
+  cleanup.
+- Combined `runServer` startup, Polymer pack generation, and a connected
+  vanilla-client visual/interaction pass remain the final acceptance gate; the
+  standalone tests do not replace that combined check.
+
+### Combined `runServer` and vanilla-client acceptance checklist
+
+Use the full compatible server mod/dependency set and the
+`26.2_Fabric_Testing` Prism instance with only Polymer, Component Viewer, and
+Fabric API. Copy `_My_Assets/options.txt` into the instance before testing.
+
+- [ ] Start through Gradle `runServer`; confirm `Done`, successful Polymer pack
+  generation, no duplicate top-level JARs, registry/mixin/model errors, or
+  relevant warnings. Connect to `localhost`, accept the pack, and confirm no
+  missing textures, raw keys, or disconnects. Sky/Ash names and overridden dye
+  icons must win in the received pack.
+- [ ] Open `/polymer creative dye_depot:items`; verify 240 unique entries and
+  representative dye, basket, wool, carpet, glass, pane, candle, bed, shulker,
+  and banner names/models. An invalid tab identifier must fail cleanly without
+  changing inventory or disconnecting the player.
+- [ ] Place, rotate, break, and recover representative custom full blocks,
+  glazed terracotta, baskets, carpets, panes, candles, beds, shulkers, and both
+  banner forms. Check drops and nearby vanilla controls; inspect all four bed
+  facings and both halves.
+- [ ] Connect panes in several masks and waterlog panes/candles. Water must be
+  visible and behave normally; dry controls must stay dry. Light/extinguish
+  one-to-four candles and candle cakes and observe the exact lit model,
+  flame/smoke, ambient sound, and the unlit negative case. Compare one versus
+  four custom candles and vanilla candles: light levels must remain 3/6/9/12
+  (candle cake 3), with no fullbright display.
+- [ ] In a Loom, combine representative custom dyes and banners, add multiple
+  patterns, duplicate a patterned banner, wash it in a cauldron, and place it
+  standing and on a wall. Layers must appear and update/remove without a raw
+  color or crash; an unpatterned banner must retain its exact custom base model.
+  Patterned cloth uses the documented fixed wave phase on the item-display path.
+- [ ] Fill, name, place, open, close, break, dispense, and cauldron-wash a
+  custom shulker. Contents must survive and the item must be rejected from
+  shulker-box slots and bundles; compare with a vanilla shulker.
+- [ ] Dye, shear, and regrow a sheep; dye wolf and cat collars; equip a llama
+  with custom carpet; place/use beds and let a villager claim one. Verify exact
+  sheep/llama/bed models and the documented safe nearest collar tint.
+- [ ] Trigger basket poofs/sound from the top with a falling entity/projectile
+  and while inside. Side/bottom projectile controls must not trigger the main
+  burst. Confirm exact dust RGB and the documented non-legacy sprite shape.
+- [ ] Craft representative direct, recolor, mix, smelting, basket pack/unpack,
+  patterned-banner duplicate, and concrete-powder hardening cases. Check
+  representative villager/wandering trades and archaeology/loot additions,
+  plus an invalid recipe/control case.
+- [ ] Restart the complete combined set, reconnect, accept the regenerated
+  pack, and recheck saved banners, shulkers, beds, waterlogged states, recipes,
+  and logs for cross-mod registry, mixin, translation, model, or Polymer state-
+  pool collisions.
+
+### Vanilla-protocol visual limits
+
+These are presentation limits of fields whose vanilla wire codecs contain only
+the 16 built-in colors; server state, interactions, recipes, drops, storage,
+and data remain exact:
+
+- A vanilla client cannot decode the 16 extended colors in banner-pattern,
+  sign-text-color, collar-color, or map-decoration enum fields. Unpatterned
+  custom banner bases are exact. Patterned banner items and placed banners use
+  a ground/wall vanilla special renderer so every layer remains visible, but
+  their base and extended layer colors, plus sign/collar/map tints, use a safe
+  nearest vanilla color where the protocol field must be sent. The patterned
+  special renderer is carried by an item display, so its cloth uses a fixed
+  wave phase rather than the client block-entity renderer's time-varying wave.
+- The exact custom shulker model is visible and all storage/open-close behavior
+  remains server-authoritative, but this implementation keeps its lid static.
+  Emulating that cosmetic motion would require a dedicated multipart virtual
+  display with ticked transforms rather than a safe wire-codec substitution.
+- The removed custom eight-sprite poof provider cannot run on a vanilla client;
+  the replacement is an exact-RGB vanilla dust particle rather than the legacy
+  rotating sprite animation.
+- The baseline `dye_override` pack is default-enabled but user-disableable on a
+  modded client. Polymer must merge it into the single required server pack so
+  Sky/Ash remains the default presentation for vanilla clients; the vanilla
+  server-pack flow provides no per-client opt-out for that merged sub-pack.
 
 ## Known base quirks preserved unless 26.2 requires otherwise
 

@@ -16,13 +16,10 @@
   "license": "CC0-1.0",
   "accessWidener": "${mod_id}.accesswidener",
   "icon": "assets/${mod_id}/icon.png",
-  "environment": "*",
+  "environment": "server",
   "entrypoints": {
     "main": [
       "com.ninni.dye_depot.DyeDepot"
-    ],
-    "client": [
-      "com.ninni.dye_depot.client.DyeDepotClient"
     ],
     "fabric-datagen": [
       "com.ninni.dye_depot.data.DyeDepotDatagen"
@@ -34,6 +31,11 @@
   "depends": {
     "fabricloader": ">=0.19.0",
     "fabric-api": "*",
+    "polymer-core": ">=0.17.3",
+    "polymer-blocks": ">=0.17.3",
+    "polymer-resource-pack": ">=0.17.3",
+    "polymer-resource-pack-extras": ">=0.17.3",
+    "polymer-virtual-entity": ">=0.17.3",
     "minecraft": "~26.2",
     "java": ">=25"
   }

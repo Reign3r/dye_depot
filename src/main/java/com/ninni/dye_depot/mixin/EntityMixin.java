@@ -1,6 +1,7 @@
 package com.ninni.dye_depot.mixin;
 
 import com.ninni.dye_depot.DyeDepot;
+import com.ninni.dye_depot.polymer.DDPolymerEntities;
 import com.ninni.dye_depot.registry.DDDyes;
 import java.util.Optional;
 import java.util.function.Function;
@@ -15,6 +16,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
@@ -34,6 +36,14 @@ public abstract class EntityMixin {
         Entity self = (Entity) (Object) this;
         if (self instanceof Sheep sheep && !sheep.isSheared() && DDDyes.isModDye(sheep.getColor())) {
             cir.setReturnValue(Optional.of(DD$SHEEP_LOOT_TABLES.apply(sheep.getColor())));
+        }
+    }
+
+    @Inject(method = "remove", at = @At("HEAD"))
+    private void DD$destroyPolymerSheepWool(Entity.RemovalReason reason, CallbackInfo ci) {
+        Entity self = (Entity) (Object) this;
+        if (self instanceof Sheep sheep) {
+            DDPolymerEntities.destroySheepWool(sheep);
         }
     }
 }

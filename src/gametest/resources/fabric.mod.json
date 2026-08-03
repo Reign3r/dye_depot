@@ -8,10 +8,8 @@
     "fabric-gametest": [
       "com.ninni.dye_depot.test.CauldronInteractionGameTests",
       "com.ninni.dye_depot.test.DyeDepotGameTests",
-      "com.ninni.dye_depot.test.DyeDepotRuntimeGameTests"
-    ],
-    "fabric-client-gametest": [
-      "com.ninni.dye_depot.test.DyeDepotClientGameTest"
+      "com.ninni.dye_depot.test.DyeDepotRuntimeGameTests",
+      "com.ninni.dye_depot.polymer.DDPolymerEntityGameTests"
     ]
   },
   "depends": {

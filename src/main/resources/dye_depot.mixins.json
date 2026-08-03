@@ -4,16 +4,17 @@
   "compatibilityLevel": "JAVA_25",
   "mixins": [
     "CauldronInteractionsAccessor",
+    "CatDataAccessor",
     "ColorCollectionMixin",
+    "ClientboundBlockEntityDataPacketMixin",
     "DyeColorMixin",
     "EntityMixin",
     "MapBannerMixin",
     "SheepMixin",
+    "SheepDataAccessor",
     "VillagerGoalPackagesMixin",
-    "client.NearestBedSensorMixin"
-  ],
-  "client": [
-    "client.SheetsMixin"
+    "NearestBedSensorMixin",
+    "WolfDataAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

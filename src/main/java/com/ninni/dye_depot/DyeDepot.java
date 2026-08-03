@@ -1,6 +1,7 @@
 package com.ninni.dye_depot;
 
 import com.google.common.reflect.Reflection;
+import com.ninni.dye_depot.polymer.DDPolymer;
 import com.ninni.dye_depot.registry.*;
 import net.fabricmc.api.ModInitializer;
 import net.minecraft.core.Registry;
@@ -36,6 +37,8 @@ public class DyeDepot implements ModInitializer {
                 DDMapDecorationType.class,
                 DDPoiTypes.class
         );
+
+        DDPolymer.initialize();
 
         DDBlocks.SHULKER_BOXES.forEach((dye, shulkerBox) ->
             DispenserBlock.registerBehavior(shulkerBox.value(), new ShulkerBoxDispenseBehavior())
