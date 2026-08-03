@@ -271,25 +271,21 @@ final class DDPolymerPack {
 
     private static String northPaneArmFaces() {
         return "\"down\":{\"uv\":[7,0,9,7],\"texture\":\"#edge\"},\"up\":{\"uv\":[7,0,9,7],\"texture\":\"#edge\"}," +
-                "\"north\":{\"uv\":[7,0,9,16],\"texture\":\"#edge\"}," +
                 "\"west\":{\"uv\":[16,0,9,16],\"texture\":\"#pane\"},\"east\":{\"uv\":[9,0,16,16],\"texture\":\"#pane\"}";
     }
 
     private static String eastPaneArmFaces() {
         return "\"down\":{\"uv\":[7,0,9,7],\"texture\":\"#edge\"},\"up\":{\"uv\":[7,0,9,7],\"texture\":\"#edge\"}," +
-                "\"east\":{\"uv\":[7,0,9,16],\"texture\":\"#edge\"}," +
-                "\"north\":{\"uv\":[9,0,16,16],\"texture\":\"#pane\"},\"south\":{\"uv\":[16,0,9,16],\"texture\":\"#pane\"}";
+                "\"north\":{\"uv\":[16,0,9,16],\"texture\":\"#pane\"},\"south\":{\"uv\":[9,0,16,16],\"texture\":\"#pane\"}";
     }
 
     private static String southPaneArmFaces() {
         return "\"down\":{\"uv\":[7,0,9,7],\"texture\":\"#edge\"},\"up\":{\"uv\":[7,0,9,7],\"texture\":\"#edge\"}," +
-                "\"south\":{\"uv\":[7,0,9,16],\"texture\":\"#edge\"}," +
                 "\"west\":{\"uv\":[7,0,0,16],\"texture\":\"#pane\"},\"east\":{\"uv\":[0,0,7,16],\"texture\":\"#pane\"}";
     }
 
     private static String westPaneArmFaces() {
         return "\"down\":{\"uv\":[7,0,9,7],\"texture\":\"#edge\"},\"up\":{\"uv\":[7,0,9,7],\"texture\":\"#edge\"}," +
-                "\"west\":{\"uv\":[7,0,9,16],\"texture\":\"#edge\"}," +
                 "\"north\":{\"uv\":[7,0,0,16],\"texture\":\"#pane\"},\"south\":{\"uv\":[0,0,7,16],\"texture\":\"#pane\"}";
     }
 

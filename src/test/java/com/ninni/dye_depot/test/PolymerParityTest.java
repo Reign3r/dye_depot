@@ -742,9 +742,27 @@ class PolymerParityTest {
                     JsonObject model = JsonParser.parseString(read(zip, path)).getAsJsonObject();
                     var elements = model.getAsJsonArray("elements");
                     assertEquals(1 + Integer.bitCount(mask), elements.size(), path);
-                    elements.forEach(element -> element.getAsJsonObject().getAsJsonObject("faces").entrySet().forEach(face ->
-                            assertEquals(4, face.getValue().getAsJsonObject().getAsJsonArray("uv").size(), path + " " + face.getKey())
-                    ));
+                    elements.forEach(element -> {
+                        JsonObject part = element.getAsJsonObject();
+                        JsonObject faces = part.getAsJsonObject("faces");
+                        faces.entrySet().forEach(face ->
+                                assertEquals(4, face.getValue().getAsJsonObject().getAsJsonArray("uv").size(), path + " " + face.getKey())
+                        );
+                        var from = part.getAsJsonArray("from");
+                        var to = part.getAsJsonArray("to");
+                        if (from.get(2).getAsDouble() == 0.0) assertFalse(faces.has("north"), path + " north connection cap");
+                        if (to.get(0).getAsDouble() == 16.0) assertFalse(faces.has("east"), path + " east connection cap");
+                        if (to.get(2).getAsDouble() == 16.0) assertFalse(faces.has("south"), path + " south connection cap");
+                        if (from.get(0).getAsDouble() == 0.0) assertFalse(faces.has("west"), path + " west connection cap");
+                    });
+                    if (mask == 10) {
+                        JsonObject eastFaces = elements.get(1).getAsJsonObject().getAsJsonObject("faces");
+                        assertEquals("[16,0,9,16]", eastFaces.getAsJsonObject("north").getAsJsonArray("uv").toString(), path);
+                        assertEquals("[9,0,16,16]", eastFaces.getAsJsonObject("south").getAsJsonArray("uv").toString(), path);
+                        JsonObject westFaces = elements.get(2).getAsJsonObject().getAsJsonObject("faces");
+                        assertEquals("[7,0,0,16]", westFaces.getAsJsonObject("north").getAsJsonArray("uv").toString(), path);
+                        assertEquals("[0,0,7,16]", westFaces.getAsJsonObject("south").getAsJsonArray("uv").toString(), path);
+                    }
                 }
             }
         }
