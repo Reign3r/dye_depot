@@ -309,7 +309,7 @@ carrier instead of remapping it a second time to a visible vanilla note block:
 | candle cakes | one shared invisible bottom-slab carrier plus exact lit/unlit display models |
 | stained-glass panes | reserved hidden brown-pane donor carrier with native dry/waterlogged connection states, collision, and selection; exact precombined displays reproduce all 16 connection masks with vanilla pane geometry/UV placement, a 180-degree item-display basis correction, and connection end caps omitted because display entities cannot perform vanilla neighbor-face culling; a server-only overlay restores real brown panes without exposing the donor inside custom panes or allocating Polymer model-pool states |
 | beds | eight shared invisible bed carriers for facing and head/foot state plus exact display models; entity yaw compensates for the vanilla item-display renderer transform |
-| shulker boxes | reserved hidden brown-shulker donor carrier preserves native facing, animated collision/pushing, and block-entity behavior; separate exact-texture base and lid displays let the client interpolate every server-tick lid transform continuously, and the same split renderer restores real brown shulkers without allocating Polymer model-pool states |
+| shulker boxes | reserved hidden brown-shulker donor carrier preserves native facing, animated collision/pushing, and block-entity behavior; separate exact-texture base and lid displays reproduce the vanilla 26.2 shell atlas (including the exposed base top and lid underside) and let the client interpolate every server-tick lid transform continuously, and the same split renderer restores real brown shulkers without allocating Polymer model-pool states |
 | standing banners | one shared invisible targetable vines carrier; plain banners combine the ground-attached vanilla special renderer with an exact custom-color cloth overlay, while patterned banners use the codec-safe vanilla special renderer |
 | wall banners | the shared invisible targetable vines carrier; plain banners combine the wall-attached vanilla special renderer with an exact custom-color cloth overlay, while patterned banners use the codec-safe vanilla special renderer |
 
@@ -352,7 +352,8 @@ carrier contention cannot prevent the combined server from starting.
   deterministic fallback accounting, schema-scoped outbound component safety,
   Sky/Ash merge ordering, all-banner special-model JSON, non-occluding glass,
   exact carpet/candle collision parity, all 16 pane masks and their face UVs,
-  exact plain-banner composites, split shulker shell models and hidden donors,
+  exact plain-banner composites, split shulker shell models, exposed-interior UVs,
+  and hidden donors,
   real-`Connection` block-entity packet sanitization, entity metadata, Polymer
   creative ordering, particles/sound/maps, and every generated virtual model.
 - Server GameTests cover the baseline gameplay/data contract, Loom acceptance

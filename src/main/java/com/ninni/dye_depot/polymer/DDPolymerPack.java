@@ -306,8 +306,11 @@ final class DDPolymerPack {
         String faces = lid
                 ? entityCubeFaces(0, 0, 16, 12, 16)
                 : entityCubeFaces(0, 28, 16, 8, 16);
+        String interior = lid
+                ? element(0, 15.99, 0, 16, 15.99, 16, faceUv("down", 16, 0, 32, 16))
+                : element(0, 0.01, 0, 16, 0.01, 16, faceUv("up", 32, 44, 48, 28));
         return "{\"ambientocclusion\":false,\"textures\":{\"particle\":\"" + texture + "\",\"shell\":\"" + texture + "\"},\"elements\":[" +
-                (lid ? element(0, 4, 0, 16, 16, 16, faces) : element(0, 0, 0, 16, 8, 16, faces)) + "]}";
+                (lid ? element(0, 4, 0, 16, 16, 16, faces) : element(0, 0, 0, 16, 8, 16, faces)) + "," + interior + "]}";
     }
 
     private static String entityCubeFaces(int u, int v, int width, int height, int depth) {
@@ -316,7 +319,7 @@ final class DDPolymerPack {
                 faceUv("east", u + depth + width, v + depth, u + depth * 2 + width, v + depth + height) + "," +
                 faceUv("south", u + depth * 2 + width, v + depth, u + depth * 2 + width * 2, v + depth + height) + "," +
                 faceUv("up", u + depth, v, u + depth + width, v + depth) + "," +
-                faceUv("down", u + depth + width, v, u + depth + width * 2, v + depth);
+                faceUv("down", u + depth + width, v + depth, u + depth + width * 2, v);
     }
 
     private static String faceUv(String face, int u1, int v1, int u2, int v2) {

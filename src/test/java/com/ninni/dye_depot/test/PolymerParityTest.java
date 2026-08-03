@@ -675,6 +675,34 @@ class PolymerParityTest {
                 assertNotNull(zip.getEntry("assets/dye_depot/models/block/polymer/" + color + "_shulker_base.json"));
                 assertNotNull(zip.getEntry("assets/dye_depot/models/block/polymer/" + color + "_shulker_lid.json"));
                 assertNotNull(zip.getEntry("assets/dye_depot/textures/block/polymer/shulker_" + color + ".png"));
+                JsonObject shulkerBase = JsonParser.parseString(read(
+                        zip,
+                        "assets/dye_depot/models/block/polymer/" + color + "_shulker_base.json"
+                )).getAsJsonObject();
+                JsonObject baseFaces = shulkerBase.getAsJsonArray("elements")
+                        .get(0).getAsJsonObject().getAsJsonObject("faces");
+                assertEquals("[4.0,7.0,8.0,11.0]", baseFaces.getAsJsonObject("up").getAsJsonArray("uv").toString());
+                assertEquals("[8.0,11.0,12.0,7.0]", baseFaces.getAsJsonObject("down").getAsJsonArray("uv").toString());
+                JsonObject baseInterior = shulkerBase.getAsJsonArray("elements").get(1).getAsJsonObject();
+                assertEquals("[0.0,0.01,0.0]", baseInterior.getAsJsonArray("from").toString());
+                assertEquals(
+                        "[8.0,11.0,12.0,7.0]",
+                        baseInterior.getAsJsonObject("faces").getAsJsonObject("up").getAsJsonArray("uv").toString()
+                );
+                JsonObject shulkerLid = JsonParser.parseString(read(
+                        zip,
+                        "assets/dye_depot/models/block/polymer/" + color + "_shulker_lid.json"
+                )).getAsJsonObject();
+                JsonObject lidFaces = shulkerLid.getAsJsonArray("elements")
+                        .get(0).getAsJsonObject().getAsJsonObject("faces");
+                assertEquals("[4.0,0.0,8.0,4.0]", lidFaces.getAsJsonObject("up").getAsJsonArray("uv").toString());
+                assertEquals("[8.0,4.0,12.0,0.0]", lidFaces.getAsJsonObject("down").getAsJsonArray("uv").toString());
+                JsonObject lidInterior = shulkerLid.getAsJsonArray("elements").get(1).getAsJsonObject();
+                assertEquals("[0.0,15.99,0.0]", lidInterior.getAsJsonArray("from").toString());
+                assertEquals(
+                        "[4.0,0.0,8.0,4.0]",
+                        lidInterior.getAsJsonObject("faces").getAsJsonObject("down").getAsJsonArray("uv").toString()
+                );
                 String bannerPath = "assets/dye_depot/items/" + color + "_banner.json";
                 String bannerJson = read(zip, bannerPath);
                 JsonObject banner = JsonParser.parseString(bannerJson).getAsJsonObject();
