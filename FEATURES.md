@@ -307,9 +307,9 @@ carrier instead of remapping it a second time to a visible vanilla note block:
 | carpets | reserved orange-carpet donor carrier with native one-pixel movement/selection collision; the generated pack hides the placed donor model and exact-color displays render both custom carpets and real orange carpets without carrier bleed |
 | candles | reserved orange-candle donor carrier with native count/lit/waterlogged states and collision; the generated pack hides the placed donor models and state-aware displays render both custom candles and real orange candles while native client candle particles avoid duplicates |
 | candle cakes | one shared invisible bottom-slab carrier plus exact lit/unlit display models |
-| stained-glass panes | reserved brown-pane donor carrier with native dry/waterlogged connection states, collision, and selection; the generated pack hides only the brown pane multipart model and exact precombined displays reconstruct both custom panes and real brown panes around the block origin without allocating Polymer model-pool states |
+| stained-glass panes | reserved hidden brown-pane donor carrier with native dry/waterlogged connection states, collision, and selection; exact precombined displays reproduce all 16 connection masks with vanilla pane geometry/UV placement and a 180-degree item-display basis correction; a server-only overlay restores real brown panes without exposing the donor inside custom panes or allocating Polymer model-pool states |
 | beds | eight shared invisible bed carriers for facing and head/foot state plus exact display models; entity yaw compensates for the vanilla item-display renderer transform |
-| shulker boxes | reserved brown-shulker donor carrier preserves native facing, animated collision/pushing, and block-entity behavior; its native entity texture is hidden and state-aware special-renderer displays reconstruct both custom and real brown shulkers with exact textures and 11 lid-openness frames without allocating Polymer model-pool states |
+| shulker boxes | reserved hidden brown-shulker donor carrier preserves native facing, animated collision/pushing, and block-entity behavior; separate exact-texture base and lid displays let the client interpolate every server-tick lid transform continuously, and the same split renderer restores real brown shulkers without allocating Polymer model-pool states |
 | standing banners | one shared invisible targetable vines carrier; plain banners combine the ground-attached vanilla special renderer with an exact custom-color cloth overlay, while patterned banners use the codec-safe vanilla special renderer |
 | wall banners | the shared invisible targetable vines carrier; plain banners combine the wall-attached vanilla special renderer with an exact custom-color cloth overlay, while patterned banners use the codec-safe vanilla special renderer |
 
@@ -351,8 +351,8 @@ carrier contention cannot prevent the combined server from starting.
   dry/waterlogged carrier geometry and sharing, bed renderer-compensated yaw,
   deterministic fallback accounting, schema-scoped outbound component safety,
   Sky/Ash merge ordering, all-banner special-model JSON, non-occluding glass,
-  exact carpet/candle collision parity, precombined pane masks, exact plain-banner
-  composites, shulker openness frames and transparent special-renderer bases,
+  exact carpet/candle collision parity, all 16 pane masks and their face UVs,
+  exact plain-banner composites, split shulker shell models and hidden donors,
   real-`Connection` block-entity packet sanitization, entity metadata, Polymer
   creative ordering, particles/sound/maps, and every generated virtual model.
 - Server GameTests cover the baseline gameplay/data contract, Loom acceptance
@@ -438,12 +438,16 @@ and data remain exact:
   visible and codec-safe; sign/collar/map tints have the same wire limitation.
   The special renderer is carried by an item display, so its cloth uses a fixed
   wave phase rather than the client block-entity renderer's time-varying wave.
-- Custom shulkers use the vanilla special renderer and authored texture, with
-  their real progress quantized to 11 visual openness frames. The server retains
-  exact expanding collision and entity pushing. The invisible vanilla-client
+- Custom shulkers use authored-texture base/lid models. The server sends each
+  real progress change and the vanilla client interpolates the lid translation
+  and rotation between ticks, avoiding the former 11-frame snapping. The server
+  retains exact expanding collision and entity pushing. The invisible vanilla-client
   carrier itself stays a closed full cube, so client-side collision prediction
   for the protruding lid is corrected by the authoritative server rather than
   encoded as an extra visible carrier block.
+- Brown stained-glass panes and brown shulker boxes are reserved as hidden
+  physical donors, then reconstructed only for actual brown server blocks so
+  both their placed forms and inventory items remain visible.
 - The removed custom eight-sprite poof provider cannot run on a vanilla client;
   the replacement is an exact-RGB vanilla dust particle rather than the legacy
   rotating sprite animation.

@@ -7,6 +7,7 @@ import eu.pb4.polymer.resourcepack.api.ResourcePackBuilder;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.Base64;
 import javax.imageio.ImageIO;
 import net.fabricmc.loader.api.FabricLoader;
@@ -61,9 +62,17 @@ final class DDPolymerPack {
                         paneBlockModel(color, mask)
                 );
             }
-            for (int step = 0; step <= 10; step++) {
-                addShulkerDefinition(builder, color, step);
-            }
+            addItemDefinition(builder, "polymer/" + color + "_shulker_base", "dye_depot:block/polymer/" + color + "_shulker_base");
+            addItemDefinition(builder, "polymer/" + color + "_shulker_lid", "dye_depot:block/polymer/" + color + "_shulker_lid");
+            builder.addStringData(
+                    "assets/dye_depot/models/block/polymer/" + color + "_shulker_base.json",
+                    shulkerPartModel(color, false)
+            );
+            builder.addStringData(
+                    "assets/dye_depot/models/block/polymer/" + color + "_shulker_lid.json",
+                    shulkerPartModel(color, true)
+            );
+            copyShulkerTextureToBlockAtlas(builder, color);
 
             builder.addStringData(
                     "assets/dye_depot/models/item/polymer/" + color + "_banner.json",
@@ -88,10 +97,6 @@ final class DDPolymerPack {
             builder.addStringData(
                     "assets/dye_depot/models/block/polymer/" + color + "_wall_banner_exact.json",
                     exactBannerClothModel(color, true)
-            );
-            builder.addStringData(
-                    "assets/dye_depot/models/item/polymer/" + color + "_shulker_empty.json",
-                    "{\"textures\":{\"particle\":\"dye_depot:block/" + color + "_wool\"},\"elements\":[]}"
             );
         }
     }
@@ -129,6 +134,12 @@ final class DDPolymerPack {
         );
 
         builder.addStringData("assets/minecraft/blockstates/brown_stained_glass_pane.json", "{\"multipart\":[]}");
+        for (String model : new String[]{"post", "side", "side_alt", "noside", "noside_alt"}) {
+            builder.addStringData(
+                    "assets/minecraft/models/block/brown_stained_glass_pane_" + model + ".json",
+                    "{\"textures\":{\"particle\":\"minecraft:block/brown_stained_glass\"},\"elements\":[]}"
+            );
+        }
         for (int mask = 0; mask < 16; mask++) {
             addItemDefinition(builder, "polymer/donor_brown_pane_" + mask, "dye_depot:block/polymer/donor_brown_pane_" + mask);
             builder.addStringData(
@@ -146,12 +157,20 @@ final class DDPolymerPack {
                 "assets/minecraft/items/brown_shulker_box.json",
                 "{\"model\":" + shulkerSpecial("minecraft:item/brown_shulker_box", "dye_depot:donor_brown", null) + "}"
         );
-        for (int step = 0; step <= 10; step++) {
-            builder.addStringData(
-                    "assets/dye_depot/items/polymer/donor_brown_shulker_box_" + step + ".json",
-                    "{\"model\":" + shulkerSpecial("minecraft:item/brown_shulker_box", "dye_depot:donor_brown", step / 10.0f) + "}"
-            );
-        }
+        addItemDefinition(builder, "polymer/donor_brown_shulker_base", "dye_depot:block/polymer/donor_brown_shulker_base");
+        addItemDefinition(builder, "polymer/donor_brown_shulker_lid", "dye_depot:block/polymer/donor_brown_shulker_lid");
+        builder.addStringData(
+                "assets/dye_depot/models/block/polymer/donor_brown_shulker_base.json",
+                shulkerPartModel("donor_brown", false)
+        );
+        builder.addStringData(
+                "assets/dye_depot/models/block/polymer/donor_brown_shulker_lid.json",
+                shulkerPartModel("donor_brown", true)
+        );
+        builder.addData(
+                "assets/dye_depot/textures/block/polymer/shulker_donor_brown.png",
+                Base64.getDecoder().decode(BROWN_SHULKER_TEXTURE)
+        );
     }
 
     private static byte[] transparentTexture(int size) {
@@ -206,17 +225,6 @@ final class DDPolymerPack {
                         "\"scale\":[0.6666667,-0.6666667,-0.6666667],\"translation\":[0.5,0.0,0.5]}}";
     }
 
-    private static void addShulkerDefinition(ResourcePackBuilder builder, String color, int step) {
-        builder.addStringData(
-                "assets/dye_depot/items/polymer/" + color + "_shulker_box_" + step + ".json",
-                "{\"model\":{\"type\":\"minecraft:special\",\"base\":\"dye_depot:item/polymer/" + color + "_shulker_empty\"," +
-                        "\"model\":{\"type\":\"minecraft:shulker_box\",\"texture\":\"dye_depot:shulker_" + color +
-                        "\",\"openness\":" + (step / 10.0f) + "},\"transformation\":{" +
-                        "\"left_rotation\":[1.0,0.0,0.0,0.0],\"right_rotation\":[0.0,0.0,0.0,1.0]," +
-                        "\"scale\":[0.9995,0.9995,0.9995],\"translation\":[0.5,1.4995,0.5]}}}"
-        );
-    }
-
     private static String shulkerSpecial(String base, String texture, Float openness) {
         return "{\"type\":\"minecraft:special\",\"base\":\"" + base + "\"," +
                 "\"model\":{\"type\":\"minecraft:shulker_box\",\"texture\":\"" + texture + "\"" +
@@ -245,15 +253,15 @@ final class DDPolymerPack {
                 "\"down\":{\"uv\":[7,7,9,9],\"texture\":\"#edge\"}," +
                         "\"up\":{\"uv\":[7,7,9,9],\"texture\":\"#edge\"}"
         );
-        if ((mask & 1) == 0) centerFaces.append(",\"north\":{\"texture\":\"#pane\"}");
-        if ((mask & 2) == 0) centerFaces.append(",\"east\":{\"texture\":\"#pane\"}");
-        if ((mask & 4) == 0) centerFaces.append(",\"south\":{\"texture\":\"#pane\"}");
-        if ((mask & 8) == 0) centerFaces.append(",\"west\":{\"texture\":\"#pane\"}");
+        if ((mask & 1) == 0) centerFaces.append(",\"north\":{\"uv\":[9,0,7,16],\"texture\":\"#pane\"}");
+        if ((mask & 2) == 0) centerFaces.append(",\"east\":{\"uv\":[7,0,9,16],\"texture\":\"#pane\"}");
+        if ((mask & 4) == 0) centerFaces.append(",\"south\":{\"uv\":[7,0,9,16],\"texture\":\"#pane\"}");
+        if ((mask & 8) == 0) centerFaces.append(",\"west\":{\"uv\":[9,0,7,16],\"texture\":\"#pane\"}");
         elements.append(element(7, 0, 7, 9, 16, 9, centerFaces.toString()));
-        if ((mask & 1) != 0) appendElement(elements, element(7, 0, 0, 9, 16, 7, paneArmFaces("north", "west", "east")));
-        if ((mask & 2) != 0) appendElement(elements, element(9, 0, 7, 16, 16, 9, paneArmFaces("east", "north", "south")));
-        if ((mask & 4) != 0) appendElement(elements, element(7, 0, 9, 9, 16, 16, paneArmFaces("south", "west", "east")));
-        if ((mask & 8) != 0) appendElement(elements, element(0, 0, 7, 7, 16, 9, paneArmFaces("west", "north", "south")));
+        if ((mask & 1) != 0) appendElement(elements, element(7, 0, 0, 9, 16, 7, northPaneArmFaces()));
+        if ((mask & 2) != 0) appendElement(elements, element(9, 0, 7, 16, 16, 9, eastPaneArmFaces()));
+        if ((mask & 4) != 0) appendElement(elements, element(7, 0, 9, 9, 16, 16, southPaneArmFaces()));
+        if ((mask & 8) != 0) appendElement(elements, element(0, 0, 7, 7, 16, 9, westPaneArmFaces()));
         return "{\"ambientocclusion\":false,\"textures\":{" +
                 "\"particle\":{\"sprite\":\"" + pane + "\",\"force_translucent\":true}," +
                 "\"pane\":{\"sprite\":\"" + pane + "\",\"force_translucent\":true}," +
@@ -261,11 +269,66 @@ final class DDPolymerPack {
                 "\"elements\":[" + elements + "]}";
     }
 
-    private static String paneArmFaces(String end, String sideA, String sideB) {
-        return "\"down\":{\"texture\":\"#edge\"},\"up\":{\"texture\":\"#edge\"}," +
-                "\"" + end + "\":{\"texture\":\"#edge\"}," +
-                "\"" + sideA + "\":{\"texture\":\"#pane\"}," +
-                "\"" + sideB + "\":{\"texture\":\"#pane\"}";
+    private static String northPaneArmFaces() {
+        return "\"down\":{\"uv\":[7,0,9,7],\"texture\":\"#edge\"},\"up\":{\"uv\":[7,0,9,7],\"texture\":\"#edge\"}," +
+                "\"north\":{\"uv\":[7,0,9,16],\"texture\":\"#edge\"}," +
+                "\"west\":{\"uv\":[16,0,9,16],\"texture\":\"#pane\"},\"east\":{\"uv\":[9,0,16,16],\"texture\":\"#pane\"}";
+    }
+
+    private static String eastPaneArmFaces() {
+        return "\"down\":{\"uv\":[7,0,9,7],\"texture\":\"#edge\"},\"up\":{\"uv\":[7,0,9,7],\"texture\":\"#edge\"}," +
+                "\"east\":{\"uv\":[7,0,9,16],\"texture\":\"#edge\"}," +
+                "\"north\":{\"uv\":[9,0,16,16],\"texture\":\"#pane\"},\"south\":{\"uv\":[16,0,9,16],\"texture\":\"#pane\"}";
+    }
+
+    private static String southPaneArmFaces() {
+        return "\"down\":{\"uv\":[7,0,9,7],\"texture\":\"#edge\"},\"up\":{\"uv\":[7,0,9,7],\"texture\":\"#edge\"}," +
+                "\"south\":{\"uv\":[7,0,9,16],\"texture\":\"#edge\"}," +
+                "\"west\":{\"uv\":[7,0,0,16],\"texture\":\"#pane\"},\"east\":{\"uv\":[0,0,7,16],\"texture\":\"#pane\"}";
+    }
+
+    private static String westPaneArmFaces() {
+        return "\"down\":{\"uv\":[7,0,9,7],\"texture\":\"#edge\"},\"up\":{\"uv\":[7,0,9,7],\"texture\":\"#edge\"}," +
+                "\"west\":{\"uv\":[7,0,9,16],\"texture\":\"#edge\"}," +
+                "\"north\":{\"uv\":[7,0,0,16],\"texture\":\"#pane\"},\"south\":{\"uv\":[0,0,7,16],\"texture\":\"#pane\"}";
+    }
+
+    private static void copyShulkerTextureToBlockAtlas(ResourcePackBuilder builder, String color) {
+        String source = "assets/dye_depot/textures/entity/shulker/shulker_" + color + ".png";
+        var path = FabricLoader.getInstance().getModContainer(DyeDepot.MOD_ID)
+                .flatMap(container -> container.findPath(source))
+                .orElseThrow(() -> new IllegalStateException("Missing shulker texture " + source));
+        try {
+            builder.addData("assets/dye_depot/textures/block/polymer/shulker_" + color + ".png", Files.readAllBytes(path));
+        } catch (IOException exception) {
+            throw new IllegalStateException("Could not copy shulker texture " + source, exception);
+        }
+    }
+
+    private static String shulkerPartModel(String color, boolean lid) {
+        String texture = "dye_depot:block/polymer/shulker_" + color;
+        String faces = lid
+                ? entityCubeFaces(0, 0, 16, 12, 16)
+                : entityCubeFaces(0, 28, 16, 8, 16);
+        return "{\"ambientocclusion\":false,\"textures\":{\"particle\":\"" + texture + "\",\"shell\":\"" + texture + "\"},\"elements\":[" +
+                (lid ? element(0, 4, 0, 16, 16, 16, faces) : element(0, 0, 0, 16, 8, 16, faces)) + "]}";
+    }
+
+    private static String entityCubeFaces(int u, int v, int width, int height, int depth) {
+        return faceUv("west", u, v + depth, u + depth, v + depth + height) + "," +
+                faceUv("north", u + depth, v + depth, u + depth + width, v + depth + height) + "," +
+                faceUv("east", u + depth + width, v + depth, u + depth * 2 + width, v + depth + height) + "," +
+                faceUv("south", u + depth * 2 + width, v + depth, u + depth * 2 + width * 2, v + depth + height) + "," +
+                faceUv("up", u + depth, v, u + depth + width, v + depth) + "," +
+                faceUv("down", u + depth + width, v, u + depth + width * 2, v + depth);
+    }
+
+    private static String faceUv(String face, int u1, int v1, int u2, int v2) {
+        return "\"" + face + "\":{\"uv\":[" + uv(u1) + "," + uv(v1) + "," + uv(u2) + "," + uv(v2) + "],\"texture\":\"#shell\"}";
+    }
+
+    private static double uv(int pixel) {
+        return pixel / 4.0;
     }
 
     private static String element(double fromX, double fromY, double fromZ, double toX, double toY, double toZ, String faces) {

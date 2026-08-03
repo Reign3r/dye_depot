@@ -51,6 +51,7 @@ import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -184,13 +185,16 @@ public final class DDPolymerBlocks {
         Block pane = donorPane();
         registerDisplayOnly(
                 pane,
-                state -> displayStack(pane.asItem(), "polymer/donor_brown_pane_" + paneMask(state))
+                state -> displayStack(pane.asItem(), "polymer/donor_brown_pane_" + paneMask(state)),
+                state -> 180.0f,
+                null
         );
 
         Block shulker = donorShulker();
         registerDisplayOnly(
                 shulker,
                 state -> new ItemStack(shulker.asItem()),
+                state -> 0.0f,
                 "donor_brown"
         );
     }
@@ -200,9 +204,18 @@ public final class DDPolymerBlocks {
     }
 
     private static void registerDisplayOnly(Block block, Function<BlockState, ItemStack> stack, String shulkerColor) {
+        registerDisplayOnly(block, stack, state -> 0.0f, shulkerColor);
+    }
+
+    private static void registerDisplayOnly(
+            Block block,
+            Function<BlockState, ItemStack> stack,
+            Function<BlockState, Float> yaw,
+            String shulkerColor
+    ) {
         if (!BlockWithElementHolder.registerOverlay(
                 block,
-                new DisplayOverlay(stack, state -> 0.0f, state -> false, state -> List.of(), null, shulkerColor)
+                new DisplayOverlay(stack, yaw, state -> false, state -> List.of(), null, shulkerColor)
         )) {
             throw new IllegalStateException("Could not reserve donor display for " + BuiltInRegistries.BLOCK.getKey(block));
         }
@@ -263,7 +276,7 @@ public final class DDPolymerBlocks {
                 state -> copySharedProperties(state, donor),
                 state -> copySharedProperties(state, donor),
                 state -> displayStack(block.asItem(), "polymer/" + color.getName() + "_pane_" + paneMask(state)),
-                state -> 0.0f,
+                state -> 180.0f,
                 state -> false,
                 state -> List.of(),
                 null,
@@ -505,7 +518,8 @@ public final class DDPolymerBlocks {
         private final ItemDisplayElement display = new ItemDisplayElement();
         private BlockState state;
         private BannerPatternLayers displayedBannerPatterns = BannerPatternLayers.EMPTY;
-        private int displayedShulkerStep = -1;
+        private final ItemDisplayElement shulkerLid;
+        private float displayedShulkerProgress = -1.0f;
 
         private StateDisplayHolder(
                 ServerLevel level,
@@ -529,8 +543,20 @@ public final class DDPolymerBlocks {
             display.setItemDisplayContext(ItemDisplayContext.NONE);
             display.setDisplaySize(1.0f, 1.0f);
             display.setScale(new Vector3f(1.0f));
+            if (shulkerColor != null) {
+                shulkerLid = new ItemDisplayElement();
+                shulkerLid.setItemDisplayContext(ItemDisplayContext.NONE);
+                shulkerLid.setDisplaySize(1.0f, 1.0f);
+                shulkerLid.setScale(new Vector3f(1.0f));
+                shulkerLid.setInterpolationDuration(1);
+            } else {
+                shulkerLid = null;
+            }
             update(initialState);
             addElement(display);
+            if (shulkerLid != null) {
+                addElement(shulkerLid);
+            }
         }
 
         private void update(BlockState state) {
@@ -539,12 +565,12 @@ public final class DDPolymerBlocks {
                 displayedBannerPatterns = readBannerPatterns();
             }
             if (shulkerColor != null) {
-                displayedShulkerStep = readShulkerStep();
+                displayedShulkerProgress = readShulkerProgress();
             }
             rebuildItem();
             if (shulkerColor != null) {
                 display.setYaw(0.0f);
-                display.setLeftRotation(state.getValue(ShulkerBoxBlock.FACING).getRotation());
+                updateShulkerTransforms(false);
             } else {
                 display.setYaw(yaw.apply(state));
             }
@@ -552,6 +578,9 @@ public final class DDPolymerBlocks {
             // zero light. Only shulkers use that carrier; partial displays keep
             // normal world lighting so candle light transitions stay natural.
             display.setBrightness(shulkerColor != null ? surroundingBrightness() : null);
+            if (shulkerLid != null) {
+                shulkerLid.setBrightness(display.getBrightness());
+            }
         }
 
         private void rebuildItem() {
@@ -561,10 +590,17 @@ public final class DDPolymerBlocks {
                 next.set(DataComponents.ITEM_MODEL, DyeDepot.modLoc(patternedBannerModel));
             }
             if (shulkerColor != null) {
-                next.set(DataComponents.ITEM_MODEL, DyeDepot.modLoc("polymer/" + shulkerColor + "_shulker_box_" + displayedShulkerStep));
+                next.set(DataComponents.ITEM_MODEL, DyeDepot.modLoc("polymer/" + shulkerColor + "_shulker_base"));
             }
             if (!ItemStack.isSameItemSameComponents(display.getItem(), next)) {
                 display.setItem(next);
+            }
+            if (shulkerLid != null) {
+                ItemStack lid = stack.apply(state);
+                lid.set(DataComponents.ITEM_MODEL, DyeDepot.modLoc("polymer/" + shulkerColor + "_shulker_lid"));
+                if (!ItemStack.isSameItemSameComponents(shulkerLid.getItem(), lid)) {
+                    shulkerLid.setItem(lid);
+                }
             }
         }
 
@@ -591,23 +627,38 @@ public final class DDPolymerBlocks {
             }
         }
 
-        private int readShulkerStep() {
+        private float readShulkerProgress() {
             if (level == null) {
-                return 0;
+                return 0.0f;
             }
             var chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
             if (chunk != null && chunk.getBlockEntity(pos) instanceof ShulkerBoxBlockEntity shulker) {
-                return Math.max(0, Math.min(10, Math.round(shulker.getProgress(1.0f) * 10.0f)));
+                return Math.max(0.0f, Math.min(1.0f, shulker.getProgress(1.0f)));
             }
-            return 0;
+            return 0.0f;
         }
 
         private void refreshShulker() {
-            int next = readShulkerStep();
-            if (next != displayedShulkerStep) {
-                displayedShulkerStep = next;
-                rebuildItem();
+            float next = readShulkerProgress();
+            if (Float.compare(next, displayedShulkerProgress) != 0) {
+                displayedShulkerProgress = next;
+                updateShulkerTransforms(true);
                 display.setBrightness(surroundingBrightness());
+                shulkerLid.setBrightness(display.getBrightness());
+            }
+        }
+
+        private void updateShulkerTransforms(boolean interpolate) {
+            Quaternionf facing = new Quaternionf(state.getValue(ShulkerBoxBlock.FACING).getRotation());
+            display.setLeftRotation(facing);
+
+            Vector3f translation = new Vector3f(0.0f, displayedShulkerProgress * 0.5f, 0.0f).rotate(facing);
+            Quaternionf lidRotation = new Quaternionf(facing)
+                    .rotateY((float) (Math.PI * 1.5) * displayedShulkerProgress);
+            shulkerLid.setTranslation(translation);
+            shulkerLid.setLeftRotation(lidRotation);
+            if (interpolate) {
+                shulkerLid.startInterpolation();
             }
         }
 

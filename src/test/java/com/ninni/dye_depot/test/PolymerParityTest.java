@@ -648,6 +648,10 @@ class PolymerParityTest {
                     .getAsJsonObject().getAsJsonArray("multipart").size());
             assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/donor_brown_pane_0.json"));
             assertNotNull(zip.getEntry("assets/dye_depot/models/block/polymer/donor_brown_pane_0.json"));
+            for (String model : List.of("post", "side", "side_alt", "noside", "noside_alt")) {
+                String path = "assets/minecraft/models/block/brown_stained_glass_pane_" + model + ".json";
+                assertEquals(0, JsonParser.parseString(read(zip, path)).getAsJsonObject().getAsJsonArray("elements").size(), path);
+            }
 
             var hiddenShulker = ImageIO.read(zip.getInputStream(zip.getEntry("assets/minecraft/textures/entity/shulker/shulker_brown.png")));
             assertEquals(64, hiddenShulker.getWidth());
@@ -662,10 +666,15 @@ class PolymerParityTest {
             assertEquals(64, restoredShulker.getHeight());
             assertTrue(hasVisiblePixel(restoredShulker), "restored brown shulker texture must remain visible");
             assertTrue(read(zip, "assets/minecraft/items/brown_shulker_box.json").contains("dye_depot:donor_brown"));
-            for (int step = 0; step <= 10; step++) {
-                assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/donor_brown_shulker_box_" + step + ".json"));
-            }
+            assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/donor_brown_shulker_base.json"));
+            assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/donor_brown_shulker_lid.json"));
+            assertNotNull(zip.getEntry("assets/dye_depot/textures/block/polymer/shulker_donor_brown.png"));
             for (String color : ResourceTestSupport.CUSTOM_COLORS) {
+                assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/" + color + "_shulker_base.json"));
+                assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/" + color + "_shulker_lid.json"));
+                assertNotNull(zip.getEntry("assets/dye_depot/models/block/polymer/" + color + "_shulker_base.json"));
+                assertNotNull(zip.getEntry("assets/dye_depot/models/block/polymer/" + color + "_shulker_lid.json"));
+                assertNotNull(zip.getEntry("assets/dye_depot/textures/block/polymer/shulker_" + color + ".png"));
                 String bannerPath = "assets/dye_depot/items/" + color + "_banner.json";
                 String bannerJson = read(zip, bannerPath);
                 JsonObject banner = JsonParser.parseString(bannerJson).getAsJsonObject();
@@ -720,8 +729,7 @@ class PolymerParityTest {
                         "assets/dye_depot/models/block/polymer/" + color + "_banner.json",
                         "assets/dye_depot/models/block/polymer/" + color + "_wall_banner.json",
                         "assets/dye_depot/models/block/polymer/" + color + "_banner_exact.json",
-                        "assets/dye_depot/models/block/polymer/" + color + "_wall_banner_exact.json",
-                        "assets/dye_depot/models/item/polymer/" + color + "_shulker_empty.json"
+                        "assets/dye_depot/models/block/polymer/" + color + "_wall_banner_exact.json"
                 )) {
                     assertNotNull(zip.getEntry(path), path);
                 }
@@ -729,16 +737,14 @@ class PolymerParityTest {
                 assertTrue(sheepModel.contains("\"elements\""));
                 assertTrue(sheepModel.contains(color + "_wool"));
 
-                for (int step = 0; step <= 10; step++) {
-                    String path = "assets/dye_depot/items/polymer/" + color + "_shulker_box_" + step + ".json";
-                    JsonObject definition = JsonParser.parseString(read(zip, path)).getAsJsonObject();
-                    JsonObject model = definition.getAsJsonObject("model");
-                    assertEquals("minecraft:special", model.get("type").getAsString(), path);
-                    assertEquals("dye_depot:item/polymer/" + color + "_shulker_empty", model.get("base").getAsString(), path);
-                    JsonObject special = model.getAsJsonObject("model");
-                    assertEquals("minecraft:shulker_box", special.get("type").getAsString(), path);
-                    assertEquals("dye_depot:shulker_" + color, special.get("texture").getAsString(), path);
-                    assertEquals(step / 10.0f, special.get("openness").getAsFloat(), 0.0001f, path);
+                for (int mask = 0; mask < 16; mask++) {
+                    String path = "assets/dye_depot/models/block/polymer/" + color + "_pane_" + mask + ".json";
+                    JsonObject model = JsonParser.parseString(read(zip, path)).getAsJsonObject();
+                    var elements = model.getAsJsonArray("elements");
+                    assertEquals(1 + Integer.bitCount(mask), elements.size(), path);
+                    elements.forEach(element -> element.getAsJsonObject().getAsJsonObject("faces").entrySet().forEach(face ->
+                            assertEquals(4, face.getValue().getAsJsonObject().getAsJsonArray("uv").size(), path + " " + face.getKey())
+                    ));
                 }
             }
         }

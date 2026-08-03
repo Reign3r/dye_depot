@@ -35,6 +35,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CandleBlock;
 import net.minecraft.world.level.block.CandleCakeBlock;
 import net.minecraft.world.level.block.entity.BannerBlockEntity;
@@ -329,10 +330,16 @@ public final class DDPolymerEntityGameTests {
         helper.assertTrue(attachment != null, "custom shulker has a live Polymer block attachment");
         var holder = attachment.holder();
         var display = (ItemDisplayElement) holder.getElements().getFirst();
+        var lid = (ItemDisplayElement) holder.getElements().get(1);
         helper.assertValueEqual(
                 display.getItem().get(DataComponents.ITEM_MODEL),
-                DyeDepot.modLoc("polymer/rose_shulker_box_0"),
-                "closed shulker starts on the native closed special renderer"
+                DyeDepot.modLoc("polymer/rose_shulker_base"),
+                "shulker base uses the exact split shell model"
+        );
+        helper.assertValueEqual(
+                lid.getItem().get(DataComponents.ITEM_MODEL),
+                DyeDepot.modLoc("polymer/rose_shulker_lid"),
+                "shulker lid uses the independently animated shell model"
         );
 
         var player = helper.makeMockServerPlayerInLevel();
@@ -348,11 +355,8 @@ public final class DDPolymerEntityGameTests {
             ShulkerBoxBlockEntity.tick(level, pos, state, entity);
             holder.tick();
         }
-        helper.assertValueEqual(
-                display.getItem().get(DataComponents.ITEM_MODEL),
-                DyeDepot.modLoc("polymer/rose_shulker_box_5"),
-                "opening shulker advances through the native special-renderer lid frames"
-        );
+        helper.assertTrue(Math.abs(lid.getTranslation().y() - 0.25f) < 0.001f, "half-open lid reaches half its travel");
+        helper.assertValueEqual(lid.getInterpolationDuration(), 1, "lid interpolates every server-tick transform on the client");
         helper.assertTrue(entity.getBoundingBox(state).maxY > 1.0, "opening lid expands the authoritative collision box");
         helper.assertTrue(display.getBrightness() != null, "shulker display uses surrounding light instead of sampling inside its opaque carrier");
 
@@ -360,21 +364,67 @@ public final class DDPolymerEntityGameTests {
             ShulkerBoxBlockEntity.tick(level, pos, state, entity);
             holder.tick();
         }
-        helper.assertValueEqual(
-                display.getItem().get(DataComponents.ITEM_MODEL),
-                DyeDepot.modLoc("polymer/rose_shulker_box_10"),
-                "fully open shulker reaches the native fully-open special renderer"
-        );
+        helper.assertTrue(Math.abs(lid.getTranslation().y() - 0.5f) < 0.001f, "fully open lid reaches vanilla eight-pixel travel");
 
         entity.triggerEvent(1, 0);
         for (int tick = 0; tick < 10; tick++) {
             ShulkerBoxBlockEntity.tick(level, pos, state, entity);
             holder.tick();
         }
+        helper.assertTrue(Math.abs(lid.getTranslation().y()) < 0.001f, "closing shulker returns its lid to the closed position");
+        holder.destroy();
+        helper.succeed();
+    }
+
+    @GameTest
+    public void adjacentPaneDisplaysCompensateItemModelOrientation(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var pane = DDBlocks.STAINED_GLASS_PANES.getOrThrow(DDDyes.MAROON.get());
+        BlockPos leftRelative = new BlockPos(1, 2, 1);
+        BlockPos rightRelative = leftRelative.east();
+        helper.setBlock(leftRelative, pane.defaultBlockState());
+        helper.setBlock(rightRelative, pane.defaultBlockState());
+
+        var leftHolder = BlockBoundAttachment.get(level, helper.absolutePos(leftRelative)).holder();
+        var rightHolder = BlockBoundAttachment.get(level, helper.absolutePos(rightRelative)).holder();
+        var left = (ItemDisplayElement) leftHolder.getElements().getFirst();
+        var right = (ItemDisplayElement) rightHolder.getElements().getFirst();
         helper.assertValueEqual(
-                display.getItem().get(DataComponents.ITEM_MODEL),
-                DyeDepot.modLoc("polymer/rose_shulker_box_0"),
-                "closing shulker returns to the native closed special renderer"
+                left.getItem().get(DataComponents.ITEM_MODEL),
+                DyeDepot.modLoc("polymer/maroon_pane_2"),
+                "left pane selects its east-connected model"
+        );
+        helper.assertValueEqual(
+                right.getItem().get(DataComponents.ITEM_MODEL),
+                DyeDepot.modLoc("polymer/maroon_pane_8"),
+                "right pane selects its west-connected model"
+        );
+        helper.assertTrue(Math.abs(left.getYaw() - 180.0f) < 0.001f, "left pane compensates item-display orientation");
+        helper.assertTrue(Math.abs(right.getYaw() - 180.0f) < 0.001f, "right pane compensates item-display orientation");
+
+        leftHolder.destroy();
+        rightHolder.destroy();
+        helper.succeed();
+    }
+
+    @GameTest
+    public void brownShulkerDonorHasVisibleAnimatedOverlay(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos relative = new BlockPos(1, 2, 1);
+        helper.setBlock(relative, Blocks.DYED_SHULKER_BOX.pick(net.minecraft.world.item.DyeColor.BROWN));
+        var holder = BlockBoundAttachment.get(level, helper.absolutePos(relative)).holder();
+        helper.assertValueEqual(holder.getElements().size(), 2, "brown donor has restored base and lid displays");
+        var base = (ItemDisplayElement) holder.getElements().getFirst();
+        var lid = (ItemDisplayElement) holder.getElements().get(1);
+        helper.assertValueEqual(
+                base.getItem().get(DataComponents.ITEM_MODEL),
+                DyeDepot.modLoc("polymer/donor_brown_shulker_base"),
+                "brown donor base uses its restored texture"
+        );
+        helper.assertValueEqual(
+                lid.getItem().get(DataComponents.ITEM_MODEL),
+                DyeDepot.modLoc("polymer/donor_brown_shulker_lid"),
+                "brown donor lid uses its restored texture"
         );
         holder.destroy();
         helper.succeed();
