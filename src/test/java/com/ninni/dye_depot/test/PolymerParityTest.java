@@ -683,11 +683,32 @@ class PolymerParityTest {
                         .get(0).getAsJsonObject().getAsJsonObject("faces");
                 assertEquals("[4.0,7.0,8.0,11.0]", baseFaces.getAsJsonObject("up").getAsJsonArray("uv").toString());
                 assertEquals("[8.0,11.0,12.0,7.0]", baseFaces.getAsJsonObject("down").getAsJsonArray("uv").toString());
+                assertEquals(6, shulkerBase.getAsJsonArray("elements").size());
                 JsonObject baseInterior = shulkerBase.getAsJsonArray("elements").get(1).getAsJsonObject();
                 assertEquals("[0.0,0.01,0.0]", baseInterior.getAsJsonArray("from").toString());
                 assertEquals(
                         "[8.0,11.0,12.0,7.0]",
                         baseInterior.getAsJsonObject("faces").getAsJsonObject("up").getAsJsonArray("uv").toString()
+                );
+                assertEquals(
+                        "[0.0,11.0,4.0,13.0]",
+                        shulkerBase.getAsJsonArray("elements").get(2).getAsJsonObject()
+                                .getAsJsonObject("faces").getAsJsonObject("east").getAsJsonArray("uv").toString()
+                );
+                assertEquals(
+                        "[8.0,11.0,12.0,13.0]",
+                        shulkerBase.getAsJsonArray("elements").get(3).getAsJsonObject()
+                                .getAsJsonObject("faces").getAsJsonObject("west").getAsJsonArray("uv").toString()
+                );
+                assertEquals(
+                        "[4.0,11.0,8.0,13.0]",
+                        shulkerBase.getAsJsonArray("elements").get(4).getAsJsonObject()
+                                .getAsJsonObject("faces").getAsJsonObject("south").getAsJsonArray("uv").toString()
+                );
+                assertEquals(
+                        "[12.0,11.0,16.0,13.0]",
+                        shulkerBase.getAsJsonArray("elements").get(5).getAsJsonObject()
+                                .getAsJsonObject("faces").getAsJsonObject("north").getAsJsonArray("uv").toString()
                 );
                 JsonObject shulkerLid = JsonParser.parseString(read(
                         zip,
@@ -695,6 +716,7 @@ class PolymerParityTest {
                 )).getAsJsonObject();
                 JsonObject lidFaces = shulkerLid.getAsJsonArray("elements")
                         .get(0).getAsJsonObject().getAsJsonObject("faces");
+                assertEquals(2, shulkerLid.getAsJsonArray("elements").size());
                 assertEquals("[4.0,0.0,8.0,4.0]", lidFaces.getAsJsonObject("up").getAsJsonArray("uv").toString());
                 assertEquals("[8.0,4.0,12.0,0.0]", lidFaces.getAsJsonObject("down").getAsJsonArray("uv").toString());
                 JsonObject lidInterior = shulkerLid.getAsJsonArray("elements").get(1).getAsJsonObject();

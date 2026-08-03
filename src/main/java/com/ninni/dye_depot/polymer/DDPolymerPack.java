@@ -308,7 +308,12 @@ final class DDPolymerPack {
                 : entityCubeFaces(0, 28, 16, 8, 16);
         String interior = lid
                 ? element(0, 15.99, 0, 16, 15.99, 16, faceUv("down", 16, 0, 32, 16))
-                : element(0, 0.01, 0, 16, 0.01, 16, faceUv("up", 32, 44, 48, 28));
+                : String.join(",",
+                        element(0, 0.01, 0, 16, 0.01, 16, faceUv("up", 32, 44, 48, 28)),
+                        element(0.01, 0.01, 0, 0.01, 8, 16, faceUv("east", 0, 44, 16, 52)),
+                        element(15.99, 0.01, 0, 15.99, 8, 16, faceUv("west", 32, 44, 48, 52)),
+                        element(0, 0.01, 0.01, 16, 8, 0.01, faceUv("south", 16, 44, 32, 52)),
+                        element(0, 0.01, 15.99, 16, 8, 15.99, faceUv("north", 48, 44, 64, 52)));
         return "{\"ambientocclusion\":false,\"textures\":{\"particle\":\"" + texture + "\",\"shell\":\"" + texture + "\"},\"elements\":[" +
                 (lid ? element(0, 4, 0, 16, 16, 16, faces) : element(0, 0, 0, 16, 8, 16, faces)) + "," + interior + "]}";
     }
