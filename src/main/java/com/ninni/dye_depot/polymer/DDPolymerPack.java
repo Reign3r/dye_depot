@@ -4,9 +4,16 @@ import com.ninni.dye_depot.DyeDepot;
 import com.ninni.dye_depot.registry.DDDyes;
 import eu.pb4.polymer.resourcepack.api.PolymerResourcePackUtils;
 import eu.pb4.polymer.resourcepack.api.ResourcePackBuilder;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.Base64;
+import javax.imageio.ImageIO;
 import net.fabricmc.loader.api.FabricLoader;
 
 final class DDPolymerPack {
+    private static final String BROWN_SHULKER_TEXTURE = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAk1BMVEUAAABWNBtiPCBdOR5nQCJbOB1eOh5iPSBzSChyRyhwRidmPyJsQyVrQiR0SCllPyLh6Kjm8K26tnnHw41vRSasqGuzr3HT1ZoAAAD///9fOx9RMRllPiFkPiFpQSNJLBVUMxpYNhtRMRhMLRZ4TCtJKxVkPSFNLhdhPB9bNx1tRCVuRCZ3SytYNRtKLBZOLxdIKxXmwgISAAAAAXRSTlMAQObYZgAAA2BJREFUeNrlU9mWmzAMBSRvmJCkme7tNMsMYXOd//+6SjaBmbTnTCEPfegF2b6SfGX72MktVNcp1bZVTUb9l5RwjYXxW2gFIEqBCGQS1M2MtwU6icYg21prK+vZAgqNznOtteEG3WyBGvWA0hiDLpmLlrdA00ODUs0W6AB1qR+0zkkDIZstoDA3Jv7aaEwXCDxoQm60XngGgDSVJnNrYf4ZFMLqiHAG9YIt0MwHExU0ugUCpdEll9fLLlIHa50jsuUahZot0DYCLTSIUi57TFLVzmXKuVqlLsvcm89ZdX2rir5THVnbY9USj2P2YejbJ/a1MR5zmVfdE/LVlRgNsEHXggXbIKwheBzFBYKVlpmwFB9yIcxySU9eYwVqyiJTPfkNj2OvnqjPUVJcYIiTkg4cAufXxzdf86dNqGgMjzU36Fpp48UMsBRf86AsyRfuibI65pt48yo7PGZyPiBkCnVJJAqiIE7VQpR6yue7H+uZMteARSuYm+gBXBW8Il4i15G46iTmJBlLEk96hLAkU/KKZNZboc1QQluR9WupAwzloFScH98q+RAyXkGxKopgYc/iyleBd4CREAzHZeTcmBxdUlm9Sgb0Yc+veYWmuPInFEpZPXFeAYIdHT2sVwg4caqG8iW3BeWvRgHgM7ByUlxD1qOcEsK9EJMAn8EaxjiNVfIIakpYVQ5BTQmPzKupwKPao1DFFFcu+RPSATy+3CCZi4u/4sjNEgH6RiwV8AP+RiC9oVEg1r9HwBPuE6D6d67gXwsQ7hJg3CMwwC+6SMeLH7HwJk5YJvASbwgsfs6ZygJGTg5V12rkhJq+kddTfnSAABAiHbmAV1wBsGeKS9GE+JTAaPZjQiOaBl4JCiHghaAEwfFJMZR4OYEk5MRJjjAWqImOgv5AmyEHaUDlvD874gL4a74f/FfvaMcQJsA354+e48CKDVD8mLiTl/6nB7KGbH848Xi09MD9Dy+CnSge8qZ44qkdvuOJMvwwHnzETyEy8DPFSesU7fjDJ4f0/OxT/3wm8+n54vbny5l8V3Pk8xxjvvfPh+D3nBN8ScRms91uNrvd+/e7XbIEmy3hHoFtwH8qwOf/CpsBM87/BnMF3v2GDwEztsD4/Gm7/fQ5jj8GzBTY7fgI7xDYBiwR+AWG6pMBRobdXQAAAABJRU5ErkJggg==";
+
     private DDPolymerPack() {
     }
 
@@ -120,6 +127,41 @@ final class DDPolymerPack {
                 "assets/minecraft/blockstates/orange_candle.json",
                 "{\"variants\":{" + candleVariants + "}}"
         );
+
+        builder.addStringData("assets/minecraft/blockstates/brown_stained_glass_pane.json", "{\"multipart\":[]}");
+        for (int mask = 0; mask < 16; mask++) {
+            addItemDefinition(builder, "polymer/donor_brown_pane_" + mask, "dye_depot:block/polymer/donor_brown_pane_" + mask);
+            builder.addStringData(
+                    "assets/dye_depot/models/block/polymer/donor_brown_pane_" + mask + ".json",
+                    paneBlockModel("minecraft", "brown", mask)
+            );
+        }
+
+        builder.addData("assets/minecraft/textures/entity/shulker/shulker_brown.png", transparentTexture(64));
+        builder.addData(
+                "assets/dye_depot/textures/entity/shulker/donor_brown.png",
+                Base64.getDecoder().decode(BROWN_SHULKER_TEXTURE)
+        );
+        builder.addStringData(
+                "assets/minecraft/items/brown_shulker_box.json",
+                "{\"model\":" + shulkerSpecial("minecraft:item/brown_shulker_box", "dye_depot:donor_brown", null) + "}"
+        );
+        for (int step = 0; step <= 10; step++) {
+            builder.addStringData(
+                    "assets/dye_depot/items/polymer/donor_brown_shulker_box_" + step + ".json",
+                    "{\"model\":" + shulkerSpecial("minecraft:item/brown_shulker_box", "dye_depot:donor_brown", step / 10.0f) + "}"
+            );
+        }
+    }
+
+    private static byte[] transparentTexture(int size) {
+        try {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            ImageIO.write(new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB), "png", output);
+            return output.toByteArray();
+        } catch (IOException exception) {
+            throw new IllegalStateException("Could not generate transparent donor texture", exception);
+        }
     }
 
     private static void addItemDefinition(ResourcePackBuilder builder, String path, String model) {
@@ -175,6 +217,14 @@ final class DDPolymerPack {
         );
     }
 
+    private static String shulkerSpecial(String base, String texture, Float openness) {
+        return "{\"type\":\"minecraft:special\",\"base\":\"" + base + "\"," +
+                "\"model\":{\"type\":\"minecraft:shulker_box\",\"texture\":\"" + texture + "\"" +
+                (openness == null ? "" : ",\"openness\":" + openness) + "},\"transformation\":{" +
+                "\"left_rotation\":[1.0,0.0,0.0,0.0],\"right_rotation\":[0.0,0.0,0.0,1.0]," +
+                "\"scale\":[0.9995,0.9995,0.9995],\"translation\":[0.5,1.4995,0.5]}}";
+    }
+
     private static String sheepCoatModel(String color) {
         String texture = "dye_depot:block/" + color + "_wool";
         return model(texture,
@@ -184,8 +234,12 @@ final class DDPolymerPack {
     }
 
     private static String paneBlockModel(String color, int mask) {
-        String pane = "dye_depot:block/" + color + "_stained_glass";
-        String edge = "dye_depot:block/" + color + "_stained_glass_pane_top";
+        return paneBlockModel("dye_depot", color, mask);
+    }
+
+    private static String paneBlockModel(String namespace, String color, int mask) {
+        String pane = namespace + ":block/" + color + "_stained_glass";
+        String edge = namespace + ":block/" + color + "_stained_glass_pane_top";
         StringBuilder elements = new StringBuilder();
         StringBuilder centerFaces = new StringBuilder(
                 "\"down\":{\"uv\":[7,7,9,9],\"texture\":\"#edge\"}," +

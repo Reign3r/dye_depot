@@ -307,9 +307,9 @@ carrier instead of remapping it a second time to a visible vanilla note block:
 | carpets | reserved orange-carpet donor carrier with native one-pixel movement/selection collision; the generated pack hides the placed donor model and exact-color displays render both custom carpets and real orange carpets without carrier bleed |
 | candles | reserved orange-candle donor carrier with native count/lit/waterlogged states and collision; the generated pack hides the placed donor models and state-aware displays render both custom candles and real orange candles while native client candle particles avoid duplicates |
 | candle cakes | one shared invisible bottom-slab carrier plus exact lit/unlit display models |
-| stained-glass panes | 32 shared invisible dry/waterlogged bars carriers for the 16 connection masks plus exact precombined display models and client-visible water; each mask is baked around the block origin so connected arms cannot be offset by item-submodel rotation |
+| stained-glass panes | reserved brown-pane donor carrier with native dry/waterlogged connection states, collision, and selection; the generated pack hides only the brown pane multipart model and exact precombined displays reconstruct both custom panes and real brown panes around the block origin without allocating Polymer model-pool states |
 | beds | eight shared invisible bed carriers for facing and head/foot state plus exact display models; entity yaw compensates for the vanilla item-display renderer transform |
-| shulker boxes | one shared invisible full-block carrier plus the vanilla shulker special renderer using the authored entity texture, a transparent base that cannot show through an open lid, 11 lid-openness frames driven by the real block entity, surrounding light sampling, and native server collision/pushing |
+| shulker boxes | reserved brown-shulker donor carrier preserves native facing, animated collision/pushing, and block-entity behavior; its native entity texture is hidden and state-aware special-renderer displays reconstruct both custom and real brown shulkers with exact textures and 11 lid-openness frames without allocating Polymer model-pool states |
 | standing banners | one shared invisible targetable vines carrier; plain banners combine the ground-attached vanilla special renderer with an exact custom-color cloth overlay, while patterned banners use the codec-safe vanilla special renderer |
 | wall banners | the shared invisible targetable vines carrier; plain banners combine the wall-attached vanilla special renderer with an exact custom-color cloth overlay, while patterned banners use the codec-safe vanilla special renderer |
 
@@ -317,7 +317,8 @@ Banner holders inspect block-entity patterns only from an already loaded
 chunk. This preserves patterned visuals while preventing recursive chunk loads
 when holders are reconstructed during server restart.
 
-The normal standalone allocation uses 43 shared invisible virtual carriers and
+The normal standalone allocation uses 10 shared invisible virtual carriers,
+two native brown donor families, and the proven orange carpet/candle donors. It
 has zero color fallbacks. Exact Polymer model allocation is deliberately
 non-fatal under a combined-mod state-pool shortage: an exhausted model falls
 back to the nearest vanilla color with the same geometry/properties, retains

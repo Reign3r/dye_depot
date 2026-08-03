@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.zip.ZipFile;
+import javax.imageio.ImageIO;
 import net.fabricmc.fabric.api.networking.v1.context.PacketContext;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
@@ -274,11 +275,29 @@ class PolymerParityTest {
         );
         assertNotNull(BlockWithElementHolder.get(Blocks.CARPET.pick(DyeColor.ORANGE).defaultBlockState()));
         assertNotNull(BlockWithElementHolder.get(Blocks.DYED_CANDLE.pick(DyeColor.ORANGE).defaultBlockState()));
+        DDBlocks.STAINED_GLASS_PANES.values().forEach(block ->
+                block.getStateDefinition().getPossibleStates().forEach(state -> {
+                    var carrier = DDPolymerBlocks.polymerState(state);
+                    assertSame(Blocks.STAINED_GLASS_PANE.pick(DyeColor.BROWN), carrier.getBlock(), state.toString());
+                    assertEquals(
+                            state.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO).toAabbs(),
+                            carrier.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO).toAabbs(),
+                            state.toString()
+                    );
+                })
+        );
+        DDBlocks.SHULKER_BOXES.values().forEach(block -> assertSame(
+                Blocks.DYED_SHULKER_BOX.pick(DyeColor.BROWN),
+                DDPolymerBlocks.polymerState(block.defaultBlockState()).getBlock(),
+                block.toString()
+        ));
+        assertNotNull(BlockWithElementHolder.get(Blocks.STAINED_GLASS_PANE.pick(DyeColor.BROWN).defaultBlockState()));
+        assertNotNull(BlockWithElementHolder.get(Blocks.DYED_SHULKER_BOX.pick(DyeColor.BROWN).defaultBlockState()));
     }
 
     @Test
     void virtualBlocksUseSharedTargetableGeometryCarriersWithoutPoolFallbacks() {
-        assertEquals(43, DDPolymerBlocks.virtualCarrierCount());
+        assertEquals(10, DDPolymerBlocks.virtualCarrierCount());
         assertEquals(0, DDPolymerBlocks.cosmeticFallbackCount());
 
         for (var family : List.of(
@@ -625,6 +644,27 @@ class PolymerParityTest {
                 assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/donor_orange_candle_" + count + ".json"));
                 assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/donor_orange_candle_" + count + "_lit.json"));
             }
+            assertEquals(0, JsonParser.parseString(read(zip, "assets/minecraft/blockstates/brown_stained_glass_pane.json"))
+                    .getAsJsonObject().getAsJsonArray("multipart").size());
+            assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/donor_brown_pane_0.json"));
+            assertNotNull(zip.getEntry("assets/dye_depot/models/block/polymer/donor_brown_pane_0.json"));
+
+            var hiddenShulker = ImageIO.read(zip.getInputStream(zip.getEntry("assets/minecraft/textures/entity/shulker/shulker_brown.png")));
+            assertEquals(64, hiddenShulker.getWidth());
+            assertEquals(64, hiddenShulker.getHeight());
+            for (int y = 0; y < hiddenShulker.getHeight(); y++) {
+                for (int x = 0; x < hiddenShulker.getWidth(); x++) {
+                    assertEquals(0, hiddenShulker.getRGB(x, y) >>> 24, "native brown donor texture must be transparent");
+                }
+            }
+            var restoredShulker = ImageIO.read(zip.getInputStream(zip.getEntry("assets/dye_depot/textures/entity/shulker/donor_brown.png")));
+            assertEquals(64, restoredShulker.getWidth());
+            assertEquals(64, restoredShulker.getHeight());
+            assertTrue(hasVisiblePixel(restoredShulker), "restored brown shulker texture must remain visible");
+            assertTrue(read(zip, "assets/minecraft/items/brown_shulker_box.json").contains("dye_depot:donor_brown"));
+            for (int step = 0; step <= 10; step++) {
+                assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/donor_brown_shulker_box_" + step + ".json"));
+            }
             for (String color : ResourceTestSupport.CUSTOM_COLORS) {
                 String bannerPath = "assets/dye_depot/items/" + color + "_banner.json";
                 String bannerJson = read(zip, bannerPath);
@@ -706,6 +746,17 @@ class PolymerParityTest {
 
     private static boolean isDyeDepot(Identifier id) {
         return id != null && DyeDepot.MOD_ID.equals(id.getNamespace());
+    }
+
+    private static boolean hasVisiblePixel(java.awt.image.BufferedImage image) {
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                if (image.getRGB(x, y) >>> 24 > 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static float normalizeDegrees(float degrees) {

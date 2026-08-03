@@ -49,7 +49,6 @@ import net.minecraft.world.level.block.entity.BannerBlockEntity;
 import net.minecraft.world.level.block.entity.BannerPatternLayers;
 import net.minecraft.world.level.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
@@ -59,6 +58,7 @@ import org.slf4j.LoggerFactory;
 public final class DDPolymerBlocks {
     private static final Logger LOGGER = LoggerFactory.getLogger("Dye Depot/Polymer Blocks");
     private static final DyeColor DONOR_COLOR = DyeColor.ORANGE;
+    private static final DyeColor SECONDARY_DONOR_COLOR = DyeColor.BROWN;
     private static final Map<Block, StateOverlay> OVERLAYS = new HashMap<>();
     private static final Set<BlockState> VIRTUAL_CARRIERS = new HashSet<>();
     private static final Set<String> COSMETIC_FALLBACKS = new LinkedHashSet<>();
@@ -180,12 +180,29 @@ public final class DDPolymerBlocks {
                                 + (state.getValue(CandleBlock.LIT) ? "_lit" : "")
                 )
         );
+
+        Block pane = donorPane();
+        registerDisplayOnly(
+                pane,
+                state -> displayStack(pane.asItem(), "polymer/donor_brown_pane_" + paneMask(state))
+        );
+
+        Block shulker = donorShulker();
+        registerDisplayOnly(
+                shulker,
+                state -> new ItemStack(shulker.asItem()),
+                "donor_brown"
+        );
     }
 
     private static void registerDisplayOnly(Block block, Function<BlockState, ItemStack> stack) {
+        registerDisplayOnly(block, stack, null);
+    }
+
+    private static void registerDisplayOnly(Block block, Function<BlockState, ItemStack> stack, String shulkerColor) {
         if (!BlockWithElementHolder.registerOverlay(
                 block,
-                new DisplayOverlay(stack, state -> 0.0f, state -> false, state -> List.of(), null, null)
+                new DisplayOverlay(stack, state -> 0.0f, state -> false, state -> List.of(), null, shulkerColor)
         )) {
             throw new IllegalStateException("Could not reserve donor display for " + BuiltInRegistries.BLOCK.getKey(block));
         }
@@ -197,6 +214,14 @@ public final class DDPolymerBlocks {
 
     private static Block donorCandle() {
         return Blocks.DYED_CANDLE.pick(DONOR_COLOR);
+    }
+
+    private static Block donorPane() {
+        return Blocks.STAINED_GLASS_PANE.pick(SECONDARY_DONOR_COLOR);
+    }
+
+    private static Block donorShulker() {
+        return Blocks.DYED_SHULKER_BOX.pick(SECONDARY_DONOR_COLOR);
     }
 
     private static void registerCandleCake(Block block, DyeColor color) {
@@ -233,20 +258,10 @@ public final class DDPolymerBlocks {
     }
 
     private static void registerPane(Block block, DyeColor color) {
-        BlockState nearest = Blocks.STAINED_GLASS_PANE.pick(DDPolymerColors.vanillaColor(color)).defaultBlockState();
+        BlockState donor = donorPane().defaultBlockState();
         registerVirtual(block,
-                state -> emptyOrFallback(
-                        BlockModelType.getBars(
-                                state.getValue(BlockStateProperties.WATERLOGGED),
-                                state.getValue(StainedGlassPaneBlock.NORTH),
-                                state.getValue(StainedGlassPaneBlock.SOUTH),
-                                state.getValue(StainedGlassPaneBlock.WEST),
-                                state.getValue(StainedGlassPaneBlock.EAST)
-                        ),
-                        copySharedProperties(state, nearest),
-                        block
-                ),
-                state -> copySharedProperties(state, nearest),
+                state -> copySharedProperties(state, donor),
+                state -> copySharedProperties(state, donor),
                 state -> displayStack(block.asItem(), "polymer/" + color.getName() + "_pane_" + paneMask(state)),
                 state -> 0.0f,
                 state -> false,
@@ -280,10 +295,10 @@ public final class DDPolymerBlocks {
     }
 
     private static void registerShulker(Block block, DyeColor color) {
-        BlockState nearest = Blocks.DYED_SHULKER_BOX.pick(DDPolymerColors.vanillaColor(color)).defaultBlockState();
+        BlockState donor = donorShulker().defaultBlockState();
         registerVirtual(block,
-                state -> emptyOrFallback(BlockModelType.FULL_BLOCK, copySharedProperties(state, nearest), block),
-                state -> copySharedProperties(state, nearest),
+                state -> copySharedProperties(state, donor),
+                state -> copySharedProperties(state, donor),
                 state -> new ItemStack(block.asItem()),
                 state -> state.getValue(ShulkerBoxBlock.FACING).toYRot(),
                 state -> false,
