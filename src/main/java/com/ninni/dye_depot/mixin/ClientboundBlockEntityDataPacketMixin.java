@@ -12,10 +12,15 @@ import org.spongepowered.asm.mixin.injection.At;
 public class ClientboundBlockEntityDataPacketMixin {
     @ModifyReturnValue(method = "getTag", at = @At("RETURN"))
     private CompoundTag dyeDepot$sanitizeExtendedColors(CompoundTag original) {
-        if (original == null || PacketContext.get() == null) {
+        PacketContext context = PacketContext.get();
+        if (original == null || context == null) {
             return original;
         }
         var packet = (ClientboundBlockEntityDataPacket) (Object) this;
-        return DDPolymerBlockEntityNbt.sanitize(packet.getType(), original);
+        return DDPolymerBlockEntityNbt.sanitize(
+                packet.getType(),
+                original,
+                context.get(PacketContext.REGISTRY_ACCESS)
+        );
     }
 }

@@ -335,6 +335,15 @@ class DataResourceParityTest {
         for (String color : CUSTOM_COLORS) {
             assertTrue(dyes.contains("dye_depot:" + color + "_dye"), () -> "c:dyes is missing " + color);
         }
+        for (String behaviorTag : List.of("dyes", "loom_dyes", "cat_collar_dyes", "wolf_collar_dyes")) {
+            Set<String> values = tagValues("data/minecraft/tags/item/" + behaviorTag + ".json");
+            for (String color : CUSTOM_COLORS) {
+                assertTrue(
+                        values.contains("dye_depot:" + color + "_dye"),
+                        () -> "minecraft:" + behaviorTag + " is missing " + color
+                );
+            }
+        }
 
         assertFamilyTag("data/minecraft/tags/block/banners.json", "banner", true);
         assertFamilyTag("data/minecraft/tags/block/beds.json", "bed", false);

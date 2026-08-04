@@ -21,6 +21,7 @@ public final class DDPolymer {
 
     public static void initialize() {
         DDPolymerPack.register();
+        DDPolymerSheepPack.register();
         PolymerResourcePackUtils.addModAssets(DyeDepot.MOD_ID);
         ResourcePackExtras.forDefault().addBridgedModelsFolder(DyeDepot.modLoc("block"), DyeDepot.modLoc("item"));
         PolymerResourcePackUtils.markAsRequired();

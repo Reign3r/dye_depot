@@ -2,6 +2,7 @@ package com.ninni.dye_depot.polymer;
 
 import com.ninni.dye_depot.DyeDepot;
 import java.util.ArrayList;
+import java.util.Optional;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
@@ -28,12 +29,25 @@ final class DDPolymerBannerBases {
     ) {
         Holder<BannerPattern> base = registries.lookupOrThrow(Registries.BANNER_PATTERN)
                 .getOrThrow(ResourceKey.create(Registries.BANNER_PATTERN, patternId(baseColor)));
+        return prepend(new BannerPatternLayers.Layer(base, DyeColor.WHITE), patterns);
+    }
+
+    static BannerPatternLayers prepend(
+            BannerPatternLayers.Layer base,
+            BannerPatternLayers patterns
+    ) {
         var layers = new ArrayList<BannerPatternLayers.Layer>(patterns.layers().size() + 1);
-        layers.add(new BannerPatternLayers.Layer(base, DyeColor.WHITE));
+        layers.add(base);
         patterns.layers().stream()
                 .filter(layer -> !isPolymerBase(layer))
                 .forEach(layers::add);
         return new BannerPatternLayers(layers);
+    }
+
+    static Optional<BannerPatternLayers.Layer> find(BannerPatternLayers patterns) {
+        return patterns.layers().stream()
+                .filter(DDPolymerBannerBases::isPolymerBase)
+                .findFirst();
     }
 
     static BannerPatternLayers strip(BannerPatternLayers patterns) {
@@ -42,7 +56,7 @@ final class DDPolymerBannerBases {
                 .toList());
     }
 
-    private static boolean isPolymerBase(BannerPatternLayers.Layer layer) {
+    static boolean isPolymerBase(BannerPatternLayers.Layer layer) {
         return layer.pattern().unwrapKey()
                 .map(ResourceKey::identifier)
                 .filter(id -> DyeDepot.MOD_ID.equals(id.getNamespace()))

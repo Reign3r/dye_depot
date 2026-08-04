@@ -30,7 +30,14 @@ public class DDItemTags extends FabricTagsProvider.ItemTagsProvider {
         groupDyedTag("dyed");
         groupDyedTag("dyes");
 
-        tagDyed(DDItems.DYES, loaderTag("dyes"));
+        tagDyed(
+                DDItems.DYES,
+                loaderTag("dyes"),
+                ItemTags.DYES,
+                ItemTags.LOOM_DYES,
+                ItemTags.CAT_COLLAR_DYES,
+                ItemTags.WOLF_COLLAR_DYES
+        );
 
         tagDyed(DDBlocks.SHULKER_BOXES, loaderTag("shulker_boxes"));
         tagDyed(DDBlocks.BANNERS, ItemTags.BANNERS);

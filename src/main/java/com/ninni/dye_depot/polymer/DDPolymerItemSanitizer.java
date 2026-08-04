@@ -1,19 +1,20 @@
 package com.ninni.dye_depot.polymer;
 
 import com.ninni.dye_depot.registry.DDDyes;
-import eu.pb4.polymer.common.api.PolymerCommonUtils;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import net.fabricmc.fabric.api.networking.v1.context.PacketContext;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.inventory.LoomMenu;
 import net.minecraft.world.item.BannerItem;
 import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.item.ItemInstance;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.item.component.ItemLore;
 import net.minecraft.world.item.component.TooltipDisplay;
@@ -35,6 +36,39 @@ public final class DDPolymerItemSanitizer {
     );
 
     private DDPolymerItemSanitizer() {
+    }
+
+    static boolean requiresPolymerConversion(ItemInstance stack) {
+        return requiresPolymerConversion(stack, 0);
+    }
+
+    private static boolean requiresPolymerConversion(ItemInstance stack, int depth) {
+        if (stack.count() <= 0) {
+            return false;
+        }
+        for (DataComponentType<DyeColor> component : COLOR_COMPONENTS) {
+            DyeColor color = stack.get(component);
+            if (color != null && DDDyes.isModDye(color)) {
+                return true;
+            }
+        }
+        BannerPatternLayers patterns = stack.get(DataComponents.BANNER_PATTERNS);
+        if (patterns != null && patterns.layers().stream().anyMatch(layer -> DDDyes.isModDye(layer.color()))) {
+            return true;
+        }
+        var blockEntityData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
+        if (blockEntityData != null) {
+            var tag = blockEntityData.copyTagWithoutId();
+            if (DDPolymerBlockEntityNbt.sanitize(blockEntityData.type(), tag) != tag) {
+                return true;
+            }
+        }
+        if (depth >= MAX_CONTAINER_DEPTH) {
+            return false;
+        }
+        ItemContainerContents contents = stack.get(DataComponents.CONTAINER);
+        return contents != null && contents.allItemsCopyStream()
+                .anyMatch(item -> requiresPolymerConversion(item, depth + 1));
     }
 
     /** Mutates only the client-side copy supplied by Polymer. */
@@ -65,6 +99,10 @@ public final class DDPolymerItemSanitizer {
             return;
         }
 
+        DyeColor exactShieldBase = original.getItem() == Items.SHIELD
+                ? original.get(DataComponents.BASE_COLOR)
+                : null;
+
         for (DataComponentType<DyeColor> component : COLOR_COMPONENTS) {
             DyeColor color = stack.get(component);
             if (color != null) {
@@ -72,15 +110,29 @@ public final class DDPolymerItemSanitizer {
             }
         }
 
-        BannerPatternLayers patterns = stack.get(DataComponents.BANNER_PATTERNS);
-        if (patterns != null) {
-            patterns = new BannerPatternLayers(patterns.layers().stream()
-                    .map(layer -> new BannerPatternLayers.Layer(layer.pattern(), DDPolymerColors.vanillaColor(layer.color())))
-                    .toList());
-            patterns = DDPolymerBannerBases.strip(patterns);
-        }
-        if (registries != null && original.getItem() instanceof BannerItem banner) {
-            BannerPatternLayers authoredPatterns = patterns == null ? BannerPatternLayers.EMPTY : patterns;
+        BannerPatternLayers originalPatterns = original.get(DataComponents.BANNER_PATTERNS);
+        BannerPatternLayers.Layer existingVisualBase = originalPatterns == null
+                ? null
+                : DDPolymerBannerBases.find(originalPatterns).orElse(null);
+        BannerPatternLayers authoredPatterns = originalPatterns == null
+                ? BannerPatternLayers.EMPTY
+                : DDPolymerBannerBases.strip(originalPatterns);
+        boolean hasCustomAuthoredPattern = authoredPatterns.layers().stream()
+                .anyMatch(layer -> DDDyes.isModDye(layer.color()));
+        boolean addedSyntheticBase = false;
+        boolean alreadyVisualized = existingVisualBase != null
+                && existingVisualBase.color() == DyeColor.WHITE
+                && exactShieldBase == null
+                && (!(original.getItem() instanceof BannerItem banner) || !DDDyes.isModDye(banner.getColor()));
+        BannerPatternLayers patterns = originalPatterns == null
+                ? null
+                : DDPolymerBannerPatterns.visualize(authoredPatterns);
+        if (alreadyVisualized) {
+            patterns = DDPolymerBannerBases.prepend(
+                    existingVisualBase,
+                    DDPolymerBannerPatterns.visualize(authoredPatterns)
+            );
+        } else if (registries != null && original.getItem() instanceof BannerItem banner) {
             // The vanilla Loom counts every client-visible layer and locks at
             // six. Omit the synthetic base only from its actual five-pattern
             // input slot so the sixth authored choice remains available.
@@ -89,11 +141,36 @@ public final class DDPolymerItemSanitizer {
                     && !isLoomInputAwaitingSixthPattern(original, authoredPatterns, context)) {
                 patterns = DDPolymerBannerBases.prepend(
                         banner.getColor(),
-                        authoredPatterns,
+                        DDPolymerBannerPatterns.visualize(authoredPatterns),
                         registries
                 );
-                preserveAuthoredPatternTooltip(original, stack, authoredPatterns);
+                addedSyntheticBase = true;
+            } else if (originalPatterns != null) {
+                patterns = DDPolymerBannerPatterns.visualize(authoredPatterns);
             }
+        }
+        if (registries != null && exactShieldBase != null && DDDyes.isModDye(exactShieldBase)) {
+            patterns = DDPolymerBannerBases.prepend(
+                    exactShieldBase,
+                    DDPolymerBannerPatterns.visualize(authoredPatterns),
+                    registries
+            );
+            addedSyntheticBase = true;
+            // The synthetic first pattern is an opaque exact-color shield face,
+            // so the unsafe custom BASE_COLOR is neither needed nor sent.
+            stack.remove(DataComponents.BASE_COLOR);
+            if (Objects.equals(
+                    original.get(DataComponents.ITEM_NAME),
+                    Items.SHIELD.components().get(DataComponents.ITEM_NAME)
+            )) {
+                stack.set(
+                        DataComponents.ITEM_NAME,
+                        Component.translatable("item.minecraft.shield." + exactShieldBase.getName())
+                );
+            }
+        }
+        if (!alreadyVisualized && (hasCustomAuthoredPattern || addedSyntheticBase)) {
+            preserveAuthoredPatternTooltip(original, stack, authoredPatterns);
         }
         if (patterns != null) {
             stack.set(DataComponents.BANNER_PATTERNS, patterns);
@@ -106,7 +183,7 @@ public final class DDPolymerItemSanitizer {
         var blockEntityData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
         if (blockEntityData != null) {
             var originalTag = blockEntityData.copyTagWithoutId();
-            var safeTag = DDPolymerBlockEntityNbt.sanitize(blockEntityData.type(), originalTag);
+            var safeTag = DDPolymerBlockEntityNbt.sanitize(blockEntityData.type(), originalTag, registries);
             if (safeTag != originalTag) {
                 stack.set(DataComponents.BLOCK_ENTITY_DATA, TypedEntityData.of(blockEntityData.type(), safeTag));
             }
@@ -138,10 +215,11 @@ public final class DDPolymerItemSanitizer {
         if (context == null || authoredPatterns.layers().size() != 5) {
             return false;
         }
-        var player = PolymerCommonUtils.getPlayer(context);
-        return player != null
-                && player.containerMenu instanceof LoomMenu loom
-                && loom.getBannerSlot().getItem() == original;
+        // Only AbstractContainerMenu's actual Loom banner-slot packet copy can
+        // carry this transient marker. Do not require player.containerMenu to
+        // be assigned yet: ServerPlayer sends a newly opened menu's initial
+        // contents before replacing the previously active menu.
+        return DDPolymerLoomSlotMarker.isMarked(original);
     }
 
     private static void preserveAuthoredPatternTooltip(

@@ -9,7 +9,9 @@
       "com.ninni.dye_depot.test.CauldronInteractionGameTests",
       "com.ninni.dye_depot.test.DyeDepotGameTests",
       "com.ninni.dye_depot.test.DyeDepotRuntimeGameTests",
-      "com.ninni.dye_depot.polymer.DDPolymerEntityGameTests"
+      "com.ninni.dye_depot.polymer.DDPolymerEntityGameTests",
+      "com.ninni.dye_depot.polymer.DDPolymerSheepInteractionGameTests",
+      "com.ninni.dye_depot.polymer.DDPolymerSignCollarGameTests"
     ]
   },
   "depends": {

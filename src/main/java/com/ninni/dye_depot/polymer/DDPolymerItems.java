@@ -26,6 +26,12 @@ final class DDPolymerItems {
     }
 
     static void register() {
+        // Vanilla items carrying a custom DyeColor (notably decorated shields)
+        // otherwise bypass Polymer entirely and send an out-of-range color ID.
+        PolymerItemUtils.CONTEXT_ITEM_CHECK.register(
+                (stack, context) -> DDPolymerItemSanitizer.requiresPolymerConversion(stack)
+        );
+
         // This global final pass also protects vanilla containers carrying Dye
         // Depot items or block-entity data.
         PolymerItemUtils.ITEM_MODIFICATION_EVENT.register((original, client, context) -> {

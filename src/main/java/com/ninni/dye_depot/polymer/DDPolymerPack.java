@@ -1,7 +1,12 @@
 package com.ninni.dye_depot.polymer;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.ninni.dye_depot.DyeDepot;
 import com.ninni.dye_depot.registry.DDDyes;
+import eu.pb4.polymer.resourcepack.api.PackResource;
 import eu.pb4.polymer.resourcepack.api.PolymerResourcePackUtils;
 import eu.pb4.polymer.resourcepack.api.ResourcePackBuilder;
 import java.awt.image.BufferedImage;
@@ -10,23 +15,55 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Base64;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import javax.imageio.ImageIO;
+import net.fabricmc.fabric.api.event.Event;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.ARGB;
 import net.minecraft.world.item.DyeColor;
 
 final class DDPolymerPack {
+    private static final List<String> VANILLA_BANNER_PATTERNS = List.of(
+            "base",
+            "square_bottom_left", "square_bottom_right", "square_top_left", "square_top_right",
+            "stripe_bottom", "stripe_top", "stripe_left", "stripe_right", "stripe_center", "stripe_middle",
+            "stripe_downright", "stripe_downleft", "small_stripes",
+            "cross", "straight_cross", "triangle_bottom", "triangle_top", "triangles_bottom", "triangles_top",
+            "diagonal_left", "diagonal_up_right", "diagonal_up_left", "diagonal_right",
+            "circle", "rhombus", "half_vertical", "half_horizontal", "half_vertical_right",
+            "half_horizontal_bottom", "border", "curly_border", "gradient", "gradient_up", "bricks",
+            "globe", "creeper", "skull", "flower", "mojang", "piglin", "flow", "guster"
+    );
+    private static final String PATTERN_PALETTE_ROOT = "polymer/banner_patterns/";
+    private static final String PATTERN_PALETTE_ID = "dye_depot:" + PATTERN_PALETTE_ROOT + "key";
+    private static final String BANNER_PATTERN_ATLAS = "assets/minecraft/atlases/banner_patterns.json";
+    private static final String SHIELD_PATTERN_ATLAS = "assets/minecraft/atlases/shield_patterns.json";
+    private static final Identifier EXACT_PATTERN_ATLAS_PHASE = DyeDepot.modLoc("exact_pattern_atlases");
     private static final String BANNER_PATTERN_BASE_TEXTURE = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAb1BMVEUAAAD29vb19fX09PTz8/Py8vLx8fHw8PDv7+/u7u7t7e3s7Ozr6+vq6urp6eno6Ojn5+fm5ubl5eXk5OTj4+Pi4uLh4eHg4ODf39/e3t7d3d3c3Nzb29va2trZ2dnY2NjX19fW1tbV1dXU1NTR0dGcBdnnAAAAAXRSTlMAQObYZgAAAnhJREFUeNrt0tutHckRRNEV2X0PyXmYIP+tkgH6F0CJ91SGDBg29D/gNmAhK1DxO0nbwSw0f75vm4J01qx/+Wn5x4/vs+++mlrvz/u+5mtf859MO9XbFeX+p591832n/eycOfc6x3yZ69+9fkxV9kTxh582daY7k0Ywo6ubc9MGredmD+7qhYK+ewW53NSFxDPQGD6haE5VHBGh2vYB8Dll9UoZRLNRER1EOA/AghW5ZouyPwbQnktKnoDRLsKaYRkAVAn1AFzppRcUjGQLkAqV5AH4b9WiOwjsXgBArvfb8wZLqBO6Zc8PCATh4+oD8Bc5TD8aKh2QxhOwUAUxYE9FEFDnEYgC3ApIg1KxFNfjBUFhAZgCihrPT5gRE6gFHApVUOIB6GfEG8YABgxAceYBuO8I0IU6wIYQoB6Ak4RoBBAxFAA8/oMCDABqCUDFY6MwAQtxArvK/x1RoLAu0FOIY5iALp4BBdDNayiAEM8XZAsUALuNAADzAOxbACksbEYVoPR5xADCAWpDJtNaJOQByMf+RV9tp3BRQT0BKQABzuQEOMTCPgAVG5QUMFKI1BulD0CQMCiHq9ftIwL0tiLXI1BQegVXc11QJVI3uo/A6GrozoZyf9SSLjKLPAF3IZDSlfZ8q1KigPsB8PVFGp3SiXNHKowc2havByCHrLITaV3NoAwkmXpsZukQ08jg/moX3tqUTvvytMFv95e71DY05pW7vx8VUWjaJ2DyajehH1XpteotYcv1PviWZ2D+/PpKSZi5Xx/fZH776BwrcFU+bj/tPpv3fZ2kvNJzPu/94/j88rU/7JzLJV+++P72q1/96le/+vv3P5ALggAsEXoXAAAAAElFTkSuQmCC";
+    private static final String SHIELD_PATTERN_BASE_TEXTURE = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAAAAACPAi4CAAAAAnRSTlMAAHaTzTgAAABXSURBVHja7dSxDcAwDANB778ikZIlG00QxPEEYhPHPEDtVwLHF5CYyG5ANakbQC12AOcGWAv3D8AO2J+4b0Bm4LIDfAtCO0CpSv1BAUA+NyIiIiIifuMGjNG4sDyP48gAAAAASUVORK5CYII=";
     private static final String BROWN_SHULKER_TEXTURE = "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAAAk1BMVEUAAABWNBtiPCBdOR5nQCJbOB1eOh5iPSBzSChyRyhwRidmPyJsQyVrQiR0SCllPyLh6Kjm8K26tnnHw41vRSasqGuzr3HT1ZoAAAD///9fOx9RMRllPiFkPiFpQSNJLBVUMxpYNhtRMRhMLRZ4TCtJKxVkPSFNLhdhPB9bNx1tRCVuRCZ3SytYNRtKLBZOLxdIKxXmwgISAAAAAXRSTlMAQObYZgAAA2BJREFUeNrlU9mWmzAMBSRvmJCkme7tNMsMYXOd//+6SjaBmbTnTCEPfegF2b6SfGX72MktVNcp1bZVTUb9l5RwjYXxW2gFIEqBCGQS1M2MtwU6icYg21prK+vZAgqNznOtteEG3WyBGvWA0hiDLpmLlrdA00ODUs0W6AB1qR+0zkkDIZstoDA3Jv7aaEwXCDxoQm60XngGgDSVJnNrYf4ZFMLqiHAG9YIt0MwHExU0ugUCpdEll9fLLlIHa50jsuUahZot0DYCLTSIUi57TFLVzmXKuVqlLsvcm89ZdX2rir5THVnbY9USj2P2YejbJ/a1MR5zmVfdE/LVlRgNsEHXggXbIKwheBzFBYKVlpmwFB9yIcxySU9eYwVqyiJTPfkNj2OvnqjPUVJcYIiTkg4cAufXxzdf86dNqGgMjzU36Fpp48UMsBRf86AsyRfuibI65pt48yo7PGZyPiBkCnVJJAqiIE7VQpR6yue7H+uZMteARSuYm+gBXBW8Il4i15G46iTmJBlLEk96hLAkU/KKZNZboc1QQluR9WupAwzloFScH98q+RAyXkGxKopgYc/iyleBd4CREAzHZeTcmBxdUlm9Sgb0Yc+veYWmuPInFEpZPXFeAYIdHT2sVwg4caqG8iW3BeWvRgHgM7ByUlxD1qOcEsK9EJMAn8EaxjiNVfIIakpYVQ5BTQmPzKupwKPao1DFFFcu+RPSATy+3CCZi4u/4sjNEgH6RiwV8AP+RiC9oVEg1r9HwBPuE6D6d67gXwsQ7hJg3CMwwC+6SMeLH7HwJk5YJvASbwgsfs6ZygJGTg5V12rkhJq+kddTfnSAABAiHbmAV1wBsGeKS9GE+JTAaPZjQiOaBl4JCiHghaAEwfFJMZR4OYEk5MRJjjAWqImOgv5AmyEHaUDlvD874gL4a74f/FfvaMcQJsA354+e48CKDVD8mLiTl/6nB7KGbH848Xi09MD9Dy+CnSge8qZ44qkdvuOJMvwwHnzETyEy8DPFSesU7fjDJ4f0/OxT/3wm8+n54vbny5l8V3Pk8xxjvvfPh+D3nBN8ScRms91uNrvd+/e7XbIEmy3hHoFtwH8qwOf/CpsBM87/BnMF3v2GDwEztsD4/Gm7/fQ5jj8GzBTY7fgI7xDYBiwR+AWG6pMBRobdXQAAAABJRU5ErkJggg==";
 
     private DDPolymerPack() {
     }
 
     static void register() {
+        var event = PolymerResourcePackUtils.RESOURCE_PACK_AFTER_INITIAL_CREATION_EVENT;
         // Apply the default-enabled Sky/Ash pack after normal mod assets so its
         // duplicate language keys win the JSON merge deterministically.
-        PolymerResourcePackUtils.RESOURCE_PACK_AFTER_INITIAL_CREATION_EVENT.register(DDPolymerPack::copyOverridePack);
-        PolymerResourcePackUtils.RESOURCE_PACK_AFTER_INITIAL_CREATION_EVENT.register(DDPolymerPack::addVanillaSafeModels);
+        event.register(DDPolymerPack::copyOverridePack);
+        event.register(DDPolymerPack::addVanillaSafeModels);
+
+        // Fabric event phases keep this callback behind every ordinary
+        // listener even when that listener registers after Dye Depot. The
+        // direct atlas contribution must still happen before Polymer merges
+        // atlas JSON; the pre-finish refresh below captures resources created
+        // by earlier pre-finish tasks and rewrites that merged contribution at
+        // output time.
+        event.addPhaseOrdering(Event.DEFAULT_PHASE, EXACT_PATTERN_ATLAS_PHASE);
+        event.register(EXACT_PATTERN_ATLAS_PHASE, DDPolymerPack::finishExactPatternAtlases);
     }
 
     private static void copyOverridePack(ResourcePackBuilder builder) {
@@ -43,7 +80,6 @@ final class DDPolymerPack {
             String safeColor = DDPolymerColors.vanillaColor(dye.get()).getName();
             addPatternedBannerDefinition(builder, "polymer/" + color + "_banner_patterned", safeColor, "ground");
             addPatternedBannerDefinition(builder, color + "_banner", safeColor, "ground");
-            addItemDefinition(builder, "polymer/" + color + "_sheep_wool", "dye_depot:item/polymer/" + color + "_sheep_wool");
             addItemDefinition(builder, "polymer/" + color + "_carpet", "dye_depot:block/" + color + "_carpet");
             addItemDefinition(builder, "polymer/" + color + "_bed_head", "dye_depot:block/" + color + "_bed_head");
             addItemDefinition(builder, "polymer/" + color + "_bed_foot", "dye_depot:block/" + color + "_bed_foot");
@@ -74,11 +110,6 @@ final class DDPolymerPack {
                     shulkerPartModel(color, true)
             );
             copyShulkerTextureToBlockAtlas(builder, color);
-
-            builder.addStringData(
-                    "assets/dye_depot/models/item/polymer/" + color + "_sheep_wool.json",
-                    sheepCoatModel(color)
-            );
         }
     }
 
@@ -92,7 +123,176 @@ final class DDPolymerPack {
                     "assets/dye_depot/textures/entity/banner/polymer_base_" + color.getName() + ".png",
                     tintedBannerPatternTexture(color)
             );
+            builder.addData(
+                    "assets/dye_depot/textures/entity/shield/polymer_base_" + color.getName() + ".png",
+                    tintedShieldPatternTexture(color)
+            );
         }
+
+        builder.addData(
+                "assets/dye_depot/textures/" + PATTERN_PALETTE_ROOT + "key.png",
+                grayscalePatternPalette()
+        );
+        for (DDDyes dye : DDDyes.values()) {
+            builder.addData(
+                    "assets/dye_depot/textures/" + PATTERN_PALETTE_ROOT + dye.getName() + ".png",
+                    exactPatternPalette(dye.get())
+            );
+        }
+    }
+
+    private static void finishExactPatternAtlases(ResourcePackBuilder builder) {
+        // Seed a complete source before Polymer materializes merged atlas
+        // files. It remains a functional fallback if the late refresh cannot
+        // parse an atlas altered by another resource converter.
+        addExactPatternAtlases(builder);
+        builder.addPreFinishTask(DDPolymerPack::refreshExactPatternAtlases);
+    }
+
+    private static void addExactPatternAtlases(ResourcePackBuilder builder) {
+        PatternTextures textures = discoverPatternTextures(builder);
+        builder.addStringData(
+                BANNER_PATTERN_ATLAS,
+                patternAtlas(textures.banner())
+        );
+        builder.addStringData(
+                SHIELD_PATTERN_ATLAS,
+                patternAtlas(textures.shield())
+        );
+    }
+
+    private static void refreshExactPatternAtlases(ResourcePackBuilder builder) {
+        PatternTextures textures = discoverPatternTextures(builder);
+        builder.addResourceConverter((path, resource) -> {
+            if (BANNER_PATTERN_ATLAS.equals(path)) {
+                return replaceExactPatternSource(builder, path, resource, textures.banner());
+            }
+            if (SHIELD_PATTERN_ATLAS.equals(path)) {
+                return replaceExactPatternSource(builder, path, resource, textures.shield());
+            }
+            return resource;
+        });
+    }
+
+    private static PatternTextures discoverPatternTextures(ResourcePackBuilder builder) {
+        Set<String> bannerTextures = vanillaPatternTextures("banner");
+        Set<String> shieldTextures = vanillaPatternTextures("shield");
+        builder.forEachResource((path, resource) -> {
+            discoverPatternTexture(path, "banner", bannerTextures);
+            discoverPatternTexture(path, "shield", shieldTextures);
+        });
+        return new PatternTextures(bannerTextures, shieldTextures);
+    }
+
+    private static PackResource replaceExactPatternSource(
+            ResourcePackBuilder builder,
+            String path,
+            PackResource original,
+            Set<String> textures
+    ) {
+        if (original == null) {
+            return null;
+        }
+
+        try {
+            JsonElement parsed = original.asJson();
+            if (parsed == null || !parsed.isJsonObject()) {
+                builder.logError("Could not refresh non-object pattern atlas " + path, null);
+                return original;
+            }
+
+            JsonObject atlas = parsed.getAsJsonObject();
+            JsonArray sources = atlas.getAsJsonArray("sources");
+            if (sources == null) {
+                builder.logError("Could not refresh pattern atlas without sources " + path, null);
+                return original;
+            }
+
+            JsonArray refreshed = new JsonArray();
+            for (JsonElement source : sources) {
+                if (!isExactPatternSource(source)) {
+                    refreshed.add(source.deepCopy());
+                }
+            }
+            refreshed.add(JsonParser.parseString(patternAtlas(textures))
+                    .getAsJsonObject()
+                    .getAsJsonArray("sources")
+                    .get(0)
+                    .deepCopy());
+            atlas.add("sources", refreshed);
+            return PackResource.fromJson(atlas);
+        } catch (Throwable exception) {
+            builder.logError("Could not refresh exact pattern atlas " + path, exception);
+            return original;
+        }
+    }
+
+    private static boolean isExactPatternSource(JsonElement source) {
+        if (!source.isJsonObject()) {
+            return false;
+        }
+        JsonElement paletteKey = source.getAsJsonObject().get("palette_key");
+        return paletteKey != null
+                && paletteKey.isJsonPrimitive()
+                && PATTERN_PALETTE_ID.equals(paletteKey.getAsString());
+    }
+
+    private static Set<String> vanillaPatternTextures(String target) {
+        Set<String> textures = new TreeSet<>();
+        VANILLA_BANNER_PATTERNS.forEach(pattern ->
+                textures.add("minecraft:entity/" + target + "/" + pattern)
+        );
+        return textures;
+    }
+
+    private static void discoverPatternTexture(String resourcePath, String target, Set<String> output) {
+        String normalized = resourcePath.replace('\\', '/');
+        if (!normalized.startsWith("assets/") || !normalized.endsWith(".png")) {
+            return;
+        }
+
+        int namespaceEnd = normalized.indexOf('/', "assets/".length());
+        if (namespaceEnd < 0) {
+            return;
+        }
+        String namespace = normalized.substring("assets/".length(), namespaceEnd);
+        String marker = "/textures/entity/" + target + "/";
+        if (!normalized.startsWith(marker, namespaceEnd)) {
+            return;
+        }
+
+        String pattern = normalized.substring(namespaceEnd + marker.length(), normalized.length() - ".png".length());
+        if (pattern.startsWith("polymer_base_")
+                || pattern.equals("banner_base")
+                || pattern.startsWith("shield_base")) {
+            return;
+        }
+        output.add(namespace + ":entity/" + target + "/" + pattern);
+    }
+
+    private static String patternAtlas(Set<String> textures) {
+        StringBuilder json = new StringBuilder(
+                "{\"sources\":[{\"type\":\"minecraft:paletted_permutations\",\"textures\":["
+        );
+        boolean first = true;
+        for (String texture : textures) {
+            if (!first) json.append(',');
+            first = false;
+            json.append('"').append(texture).append('"');
+        }
+        json.append("],\"palette_key\":\"dye_depot:")
+                .append(PATTERN_PALETTE_ROOT).append("key\",\"permutations\":{");
+        first = true;
+        for (DDDyes dye : DDDyes.values()) {
+            if (!first) json.append(',');
+            first = false;
+            json.append("\"dye_depot_").append(dye.getName()).append("\":\"dye_depot:")
+                    .append(PATTERN_PALETTE_ROOT).append(dye.getName()).append('"');
+        }
+        return json.append("},\"separator\":\"_\"}]}").toString();
+    }
+
+    private record PatternTextures(Set<String> banner, Set<String> shield) {
     }
 
     private static void addDonorCarrierModels(ResourcePackBuilder builder) {
@@ -178,9 +378,17 @@ final class DDPolymerPack {
     }
 
     private static byte[] tintedBannerPatternTexture(DyeColor color) {
+        return tintedPatternTexture(color, BANNER_PATTERN_BASE_TEXTURE, "banner");
+    }
+
+    private static byte[] tintedShieldPatternTexture(DyeColor color) {
+        return tintedPatternTexture(color, SHIELD_PATTERN_BASE_TEXTURE, "shield");
+    }
+
+    private static byte[] tintedPatternTexture(DyeColor color, String encodedSource, String target) {
         try {
             BufferedImage source = ImageIO.read(new ByteArrayInputStream(
-                    Base64.getDecoder().decode(BANNER_PATTERN_BASE_TEXTURE)
+                    Base64.getDecoder().decode(encodedSource)
             ));
             BufferedImage output = new BufferedImage(source.getWidth(), source.getHeight(), BufferedImage.TYPE_INT_ARGB);
             int tint = color.getTextureDiffuseColor();
@@ -202,13 +410,46 @@ final class DDPolymerPack {
             ImageIO.write(output, "png", bytes);
             return bytes.toByteArray();
         } catch (IOException exception) {
-            throw new IllegalStateException("Could not generate banner base pattern for " + color.getName(), exception);
+            throw new IllegalStateException("Could not generate " + target + " base pattern for " + color.getName(), exception);
         }
     }
 
     private static int compensateWhiteTint(int source, int tint, int white) {
         int desired = Math.round(source * tint / 255.0f);
         return Math.min(255, Math.round(desired * 255.0f / white));
+    }
+
+    private static byte[] grayscalePatternPalette() {
+        BufferedImage palette = new BufferedImage(256, 1, BufferedImage.TYPE_INT_ARGB);
+        for (int gray = 0; gray < 256; gray++) {
+            palette.setRGB(gray, 0, ARGB.color(255, gray, gray, gray));
+        }
+        return encodePng(palette, "banner pattern key palette");
+    }
+
+    private static byte[] exactPatternPalette(DyeColor color) {
+        BufferedImage palette = new BufferedImage(256, 1, BufferedImage.TYPE_INT_ARGB);
+        int tint = color.getTextureDiffuseColor();
+        int white = DyeColor.WHITE.getTextureDiffuseColor();
+        for (int gray = 0; gray < 256; gray++) {
+            palette.setRGB(gray, 0, ARGB.color(
+                    255,
+                    compensateWhiteTint(gray, ARGB.red(tint), ARGB.red(white)),
+                    compensateWhiteTint(gray, ARGB.green(tint), ARGB.green(white)),
+                    compensateWhiteTint(gray, ARGB.blue(tint), ARGB.blue(white))
+            ));
+        }
+        return encodePng(palette, color.getName() + " banner pattern palette");
+    }
+
+    private static byte[] encodePng(BufferedImage image, String description) {
+        try {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            ImageIO.write(image, "png", output);
+            return output.toByteArray();
+        } catch (IOException exception) {
+            throw new IllegalStateException("Could not generate " + description, exception);
+        }
     }
 
     private static void addItemDefinition(ResourcePackBuilder builder, String path, String model) {
@@ -244,14 +485,6 @@ final class DDPolymerPack {
                 (openness == null ? "" : ",\"openness\":" + openness) + "},\"transformation\":{" +
                 "\"left_rotation\":[1.0,0.0,0.0,0.0],\"right_rotation\":[0.0,0.0,0.0,1.0]," +
                 "\"scale\":[0.9995,0.9995,0.9995],\"translation\":[0.5,1.4995,0.5]}}";
-    }
-
-    private static String sheepCoatModel(String color) {
-        String texture = "dye_depot:block/" + color + "_wool";
-        return model(texture,
-                box(2, 4, 2, 14, 12, 14, "#wool") + "," +
-                box(4, 6, -2, 12, 14, 4, "#wool")
-        );
     }
 
     private static String paneBlockModel(String color, int mask) {
@@ -356,17 +589,4 @@ final class DDPolymerPack {
         elements.append(',').append(element);
     }
 
-    private static String model(String texture, String elements) {
-        return "{\"textures\":{\"particle\":\"" + texture + "\",\"wool\":\"" + texture + "\"},\"elements\":[" + elements + "]}";
-    }
-
-    private static String box(double fromX, double fromY, double fromZ, double toX, double toY, double toZ, String texture) {
-        return "{\"from\":[" + fromX + "," + fromY + "," + fromZ + "],\"to\":[" + toX + "," + toY + "," + toZ + "],\"faces\":{" +
-                "\"down\":{\"texture\":\"" + texture + "\"}," +
-                "\"up\":{\"texture\":\"" + texture + "\"}," +
-                "\"north\":{\"texture\":\"" + texture + "\"}," +
-                "\"south\":{\"texture\":\"" + texture + "\"}," +
-                "\"west\":{\"texture\":\"" + texture + "\"}," +
-                "\"east\":{\"texture\":\"" + texture + "\"}}}";
-    }
 }
