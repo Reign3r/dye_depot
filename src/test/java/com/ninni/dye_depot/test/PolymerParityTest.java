@@ -479,9 +479,10 @@ class PolymerParityTest {
             byte rawSheared = (byte) (dye.getId() | 32);
             byte safeUnsheared = DDPolymerEntities.vanillaSheepData(rawUnsheared);
             byte safeSheared = DDPolymerEntities.vanillaSheepData(rawSheared);
-            assertEquals(DyeColor.WHITE.getId(), safeUnsheared & 15, "white suppresses the native 26.2 undercoat");
-            assertTrue((safeUnsheared & 16) != 0, "virtual coat suppresses native outer wool");
-            assertEquals(DyeColor.WHITE.getId(), safeSheared & 15, "sheared proxy also suppresses native undercoat");
+            int expectedDonor = dye.getId() < 31 ? dye.getId() - 15 : DyeColor.ORANGE.getId();
+            assertEquals(expectedDonor, safeUnsheared & 15, "custom wool uses a non-white native tint donor");
+            assertFalse((safeUnsheared & 16) != 0, "unsheared custom wool keeps the native wool layers visible");
+            assertEquals(expectedDonor, safeSheared & 15, "sheared custom wool retains its tint donor");
             assertTrue((safeSheared & 16) != 0);
             assertTrue(DDPolymerEntities.vanillaCollarData(dye.getId()) < 16);
 
@@ -988,6 +989,95 @@ class PolymerParityTest {
                         packPath + " must embed the exact 26.2 sheep-wool texture without a client-jar lookup"
                 );
             }
+            String vertexShader = read(zip, "assets/minecraft/shaders/core/entity.vsh");
+            String fragmentShader = read(zip, "assets/minecraft/shaders/core/entity.fsh");
+            assertTrue(vertexShader.startsWith("#version 330"));
+            assertTrue(fragmentShader.startsWith("#version 330"));
+            for (String contract : List.of(
+                    "PER_FACE_LIGHTING", "NO_CARDINAL_LIGHTING", "NO_OVERLAY", "EMISSIVE",
+                    "DISSOLVE", "ALPHA_CUTOUT", "APPLY_TEXTURE_MATRIX"
+            )) {
+                assertTrue(vertexShader.contains(contract) || fragmentShader.contains(contract), contract);
+            }
+            for (String transport : List.of(
+                    "dyeDepotPosition", "dyeDepotRawColor", "dFdx", "dFdy", "log2",
+                    "DYE_DEPOT_MARKER", "dyeDepotCustomColor", "customUnsheared",
+                    "dyeDepotTextureTag() == 249", "latticeStep % 5"
+            )) {
+                assertTrue(vertexShader.contains(transport) || fragmentShader.contains(transport), transport);
+            }
+
+            Map<String, Integer> nativeSheepTextureTypes = Map.of(
+                    "sheep_wool", 0x00010201,
+                    "sheep_wool_baby", 0x00010202,
+                    "sheep_wool_undercoat", 0x00010203
+            );
+            for (var texture : nativeSheepTextureTypes.entrySet()) {
+                String name = texture.getKey();
+                var marked = ImageIO.read(zip.getInputStream(zip.getEntry(
+                        "assets/minecraft/textures/entity/sheep/" + name + ".png"
+                )));
+                var original = ImageIO.read(zip.getInputStream(zip.getEntry(
+                        "assets/dye_depot/textures/block/polymer/" + name + ".png"
+                )));
+                assertEquals(64, marked.getWidth(), name);
+                assertEquals(32, marked.getHeight(), name);
+                assertEquals(0x00D9E5A1, marked.getRGB(63, 31), name + " marker");
+                assertEquals(texture.getValue().intValue(), marked.getRGB(62, 31), name + " type marker");
+                Set<Integer> metricTags = new HashSet<>();
+                for (int y = 0; y < 32; y++) {
+                    for (int x = 0; x < 64; x++) {
+                        int source = original.getRGB(x, y);
+                        int generated = marked.getRGB(x, y);
+                        if (ARGB.alpha(source) != 0) {
+                            assertEquals(source & 0x00ffffff, generated & 0x00ffffff, name + " RGB at " + x + ',' + y);
+                            if (name.equals("sheep_wool_undercoat")) {
+                                assertEquals(
+                                        isAdultHiddenTexel(x, y) ? 249 : 255,
+                                        ARGB.alpha(generated),
+                                        "undercoat visibility tag at " + x + ',' + y
+                                );
+                            }
+                            metricTags.add(ARGB.alpha(generated));
+                        }
+                    }
+                }
+                if (name.equals("sheep_wool")) {
+                    assertEquals(Set.of(250, 251, 252, 253, 254, 255), metricTags, "adult face metrics");
+                } else if (name.equals("sheep_wool_undercoat")) {
+                    assertEquals(Set.of(249, 255), metricTags, "undercoat separates hidden and exposed remnants");
+                    assertEquals(380, countAlpha(marked, 249), "opaque undercoat texels enclosed by outer wool");
+                    assertEquals(
+                            87,
+                            countAlpha(marked, 255),
+                            "68 exposed and 19 unmapped opaque undercoat source texels"
+                    );
+                } else {
+                    assertEquals(Set.of(255), metricTags, name + " retains opaque visible texels");
+                }
+            }
+
+            Map<String, Integer> nativeSheepBaseTypes = Map.of(
+                    "sheep", 0x00010204,
+                    "sheep_baby", 0x00010205
+            );
+            for (var texture : nativeSheepBaseTypes.entrySet()) {
+                String name = texture.getKey();
+                var marked = ImageIO.read(zip.getInputStream(zip.getEntry(
+                        "assets/minecraft/textures/entity/sheep/" + name + ".png"
+                )));
+                assertEquals(64, marked.getWidth(), name);
+                assertEquals(32, marked.getHeight(), name);
+                assertEquals(0x00D9E5A1, marked.getRGB(63, 31), name + " marker");
+                assertEquals(texture.getValue().intValue(), marked.getRGB(62, 31), name + " type marker");
+                if (name.equals("sheep")) {
+                    assertEquals(836, countAlpha(marked, 249), "adult base texels enclosed by the outer coat");
+                    assertEquals(215, countAlpha(marked, 255), "adult exposed and unused source texels remain opaque");
+                } else {
+                    assertEquals(464, countAlpha(marked, 249), "baby base/wool overlap texels");
+                    assertEquals(106, countAlpha(marked, 255), "baby face and hoof texels remain opaque");
+                }
+            }
             List<String> sheepParts = List.of(
                     "adult_head",
                     "adult_body",
@@ -1330,6 +1420,32 @@ class PolymerParityTest {
             }
         }
         return false;
+    }
+
+    private static int countAlpha(java.awt.image.BufferedImage image, int alpha) {
+        int count = 0;
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                if (ARGB.alpha(image.getRGB(x, y)) == alpha) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    private static boolean isAdultHiddenTexel(int x, int y) {
+        return inside(x, y, 8, 0, 12, 6)
+                || inside(x, y, 0, 8, 6, 6)
+                || inside(x, y, 16, 8, 12, 6)
+                || inside(x, y, 34, 8, 16, 6)
+                || inside(x, y, 28, 14, 28, 16)
+                || inside(x, y, 8, 16, 4, 4)
+                || inside(x, y, 0, 20, 16, 6);
+    }
+
+    private static boolean inside(int x, int y, int left, int top, int width, int height) {
+        return x >= left && x < left + width && y >= top && y < top + height;
     }
 
     private static float normalizeDegrees(float degrees) {

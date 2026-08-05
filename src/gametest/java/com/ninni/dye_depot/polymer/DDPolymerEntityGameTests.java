@@ -9,8 +9,10 @@ import com.ninni.dye_depot.registry.DDBlocks;
 import com.ninni.dye_depot.registry.DDDyes;
 import com.ninni.dye_depot.registry.DDItems;
 import eu.pb4.polymer.core.api.entity.PolymerEntity;
+import eu.pb4.polymer.core.api.entity.PolymerEntityUtils;
 import eu.pb4.polymer.core.api.item.PolymerItem;
 import eu.pb4.polymer.core.api.item.PolymerItemUtils;
+import eu.pb4.polymer.core.api.other.PlayerBoundConsumer;
 import eu.pb4.polymer.core.api.utils.PolymerSyncedObject;
 import eu.pb4.polymer.core.impl.interfaces.GenericPlayerContext;
 import eu.pb4.polymer.virtualentity.api.BlockWithElementHolder;
@@ -23,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.fabricmc.fabric.api.networking.v1.context.PacketContext;
@@ -42,15 +45,20 @@ import net.minecraft.network.HashedPatchMap;
 import net.minecraft.network.HashedStack;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.game.ClientboundContainerSetContentPacket;
 import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkPacketData;
+import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
+import net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.util.ARGB;
 import net.minecraft.util.HashOps;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.feline.Cat;
 import net.minecraft.world.entity.animal.sheep.Sheep;
 import net.minecraft.world.entity.animal.wolf.Wolf;
@@ -1653,6 +1661,48 @@ public final class DDPolymerEntityGameTests {
         Sheep sheep = helper.spawn(EntityTypes.SHEEP, new BlockPos(1, 2, 1));
         PolymerEntity overlay = PolymerEntity.get(sheep);
 
+        if (DDPolymerSheepShaderPack.isEnabled()) {
+            var transports = new java.util.HashSet<String>();
+            for (DyeColor color : DyeColor.values()) {
+                for (boolean sheared : List.of(false, true)) {
+                    int shaderClass = DDPolymerSheepShaderPack.shaderClass(color, sheared);
+                    DyeColor donor = DDPolymerSheepShaderPack.donorColor(color, sheared);
+                    transports.add(donor.getId() + ":" + shaderClass);
+                    helper.assertTrue(donor.getId() < 16, color.getName() + " has a codec-safe donor");
+                    if (color.getId() >= 16 && sheared) {
+                        helper.assertTrue(
+                                donor != DyeColor.WHITE,
+                                color.getName() + " sheared transport keeps the native undercoat render call"
+                        );
+                    }
+                    for (double scale : List.of(0.0625, 0.5, 1.0, 1.25, 4.0, 16.0)) {
+                        double encoded = DDPolymerSheepShaderPack.encodeScale(scale, shaderClass);
+                        helper.assertValueEqual(
+                                DDPolymerSheepShaderPack.decodeScaleClass(encoded),
+                                shaderClass,
+                                color.getName() + " scale residue round trip at " + scale
+                        );
+                        helper.assertTrue(
+                                Math.abs(encoded / scale - 1.0) <= 0.022,
+                                color.getName() + " client-only scale residue remains below 2.2%"
+                        );
+                    }
+                }
+            }
+            helper.assertValueEqual(
+                    transports.size(),
+                    48,
+                    "donor plus residue class uniquely transports 16 vanilla and 32 custom coat states"
+            );
+            sheep.setColor(DDDyes.MAROON.get());
+            helper.assertTrue(
+                    DDPolymerEntities.sheepWoolHolder(overlay) == null,
+                    "enabled native shader mode creates no sheep display entities"
+            );
+            helper.succeed();
+            return;
+        }
+
         helper.assertTrue(
                 DDPolymerEntities.sheepWoolHolder(overlay) == null,
                 "ordinary vanilla sheep allocate no virtual display entities"
@@ -1725,6 +1775,31 @@ public final class DDPolymerEntityGameTests {
         sheep.setColor(DyeColor.WHITE);
         sheep.setCustomName(Component.literal("jeb_"));
         PolymerEntity overlay = PolymerEntity.get(sheep);
+
+        if (DDPolymerSheepShaderPack.isEnabled()) {
+            var nameAccessor = EntityDataAccessors.dyeDepot$getCustomNameData();
+            var nameUpdate = new ArrayList<SynchedEntityData.DataValue<?>>();
+            nameUpdate.add(SynchedEntityData.DataValue.create(
+                    nameAccessor,
+                    Optional.of(Component.literal("jeb_"))
+            ));
+            overlay.modifyRawTrackedData(nameUpdate, helper.makeMockServerPlayerInLevel(), false);
+            @SuppressWarnings("unchecked")
+            Optional<Component> clientName = (Optional<Component>) nameUpdate.getFirst().value();
+            helper.assertValueEqual(clientName.orElseThrow().getString(), "jeb_", "native shader keeps the magic name exact");
+            helper.assertValueEqual(sheep.getCustomName().getString(), "jeb_", "server magic name remains exact");
+            helper.assertValueEqual(
+                    DDPolymerSheepShaderPack.shaderClass(sheep),
+                    DDPolymerSheepShaderPack.VANILLA_CLASS,
+                    "experimental jeb sheep retains vanilla's native renderer and animation"
+            );
+            helper.assertTrue(
+                    DDPolymerEntities.sheepWoolHolder(overlay) == null,
+                    "native jeb sheep creates no virtual wool parts"
+            );
+            helper.succeed();
+            return;
+        }
 
         var nameAccessor = EntityDataAccessors.dyeDepot$getCustomNameData();
         var woolAccessor = SheepDataAccessor.dyeDepot$getWoolData();
@@ -1870,6 +1945,23 @@ public final class DDPolymerEntityGameTests {
         }
     }
 
+    private static ClientboundUpdateAttributesPacket encodeClientboundAttributes(
+            ClientboundUpdateAttributesPacket packet,
+            Connection connection,
+            RegistryAccess registries
+    ) {
+        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+        try {
+            PacketContext.supplyWithContext(connection, () -> {
+                ClientboundUpdateAttributesPacket.STREAM_CODEC.encode(buffer, packet);
+                return null;
+            });
+            return ClientboundUpdateAttributesPacket.STREAM_CODEC.decode(buffer);
+        } finally {
+            buffer.release();
+        }
+    }
+
     private static ItemStack decodeServerboundStack(ItemStack stack, Connection connection, RegistryAccess registries) {
         RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
         try {
@@ -1884,11 +1976,165 @@ public final class DDPolymerEntityGameTests {
     }
 
     @GameTest
+    public void sheepMetadataUpdateImmediatelyCarriesAnEntityBoundShaderScale(GameTestHelper helper) {
+        if (!DDPolymerSheepShaderPack.isEnabled()) {
+            helper.succeed();
+            return;
+        }
+
+        Sheep sheep = helper.spawn(EntityTypes.SHEEP, new BlockPos(1, 2, 1));
+        PolymerEntity overlay = PolymerEntity.get(sheep);
+        var player = helper.makeMockServerPlayerInLevel();
+        var registries = helper.getLevel().registryAccess();
+        var connection = ((ServerCommonPacketListenerImplAccessor) player.connection).getConnection();
+        var context = connection.getPacketContext();
+        context.set(PacketContextImpl.REGISTRY_ACCESS, registries);
+        context.set(PacketContextImpl.SERVER_INSTANCE, helper.getLevel().getServer());
+        context.set(PacketContextImpl.GAME_PROFILE, player.getGameProfile());
+        var woolAccessor = SheepDataAccessor.dyeDepot$getWoolData();
+        var emitted = new ArrayList<Packet<?>>();
+        PlayerBoundConsumer<Packet<?>> sender = PlayerBoundConsumer.createPacketFor(
+                Set.of(player.connection),
+                sheep,
+                emitted::add
+        );
+
+        for (DyeColor color : List.of(DDDyes.MAROON.get(), DDDyes.TAN.get())) {
+            for (boolean sheared : List.of(false, true)) {
+                sheep.setColor(color);
+                sheep.setSheared(sheared);
+                emitted.clear();
+                sender.accept(new ClientboundSetEntityDataPacket(
+                        sheep.getId(),
+                        List.of(SynchedEntityData.DataValue.create(
+                                woolAccessor,
+                                sheep.getEntityData().get(woolAccessor)
+                        ))
+                ));
+
+                helper.assertValueEqual(
+                        emitted.size(),
+                        2,
+                        color.getName() + " metadata is immediately followed by one scale update"
+                );
+                helper.assertTrue(
+                        emitted.getFirst() instanceof ClientboundSetEntityDataPacket,
+                        "the original metadata packet remains first"
+                );
+                helper.assertTrue(
+                        emitted.get(1) instanceof ClientboundUpdateAttributesPacket,
+                        "the corrective scale packet follows in the same tracker pass"
+                );
+                helper.assertTrue(
+                        PolymerEntityUtils.getEntityContext(emitted.get(1)) == sheep,
+                        "Polymer attaches the sheep context to the corrective scale packet"
+                );
+
+                var outbound = encodeClientboundAttributes(
+                        (ClientboundUpdateAttributesPacket) emitted.get(1),
+                        connection,
+                        registries
+                );
+                var scale = outbound.getValues().stream()
+                        .filter(snapshot -> snapshot.attribute().equals(Attributes.SCALE))
+                        .findFirst()
+                        .orElseThrow();
+                var residue = scale.modifiers().stream()
+                        .filter(modifier -> modifier.id().equals(DyeDepot.modLoc("polymer/sheep_scale_residue")))
+                        .findFirst()
+                        .orElseThrow();
+                double clientScale = scale.base() * (1.0 + residue.amount());
+                helper.assertValueEqual(
+                        DDPolymerSheepShaderPack.decodeScaleClass(clientScale),
+                        DDPolymerSheepShaderPack.shaderClass(color, sheared),
+                        color.getName() + " transition reaches its exact unsheared/sheared shader class"
+                );
+                helper.assertTrue(
+                        Float.floatToIntBits(sheep.getScale()) == Float.floatToIntBits(1.0f),
+                        "corrective packet leaves authoritative scale and collision unchanged"
+                );
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest
     public void customSheepCoatTracksStateAndCleansUpWithItsEntity(GameTestHelper helper) {
         Sheep sheep = helper.spawn(EntityTypes.SHEEP, new BlockPos(1, 2, 1));
         sheep.setColor(DDDyes.MAROON.get());
 
         PolymerEntity overlay = PolymerEntity.get(sheep);
+        if (DDPolymerSheepShaderPack.isEnabled()) {
+            var player = helper.makeMockServerPlayerInLevel();
+            var woolAccessor = SheepDataAccessor.dyeDepot$getWoolData();
+            for (DyeColor color : List.of(DDDyes.MAROON.get(), DDDyes.TAN.get(), DyeColor.BROWN)) {
+                sheep.setColor(color);
+                for (boolean sheared : List.of(false, true)) {
+                    sheep.setSheared(sheared);
+                    byte raw = sheep.getEntityData().get(woolAccessor);
+                    var tracked = new ArrayList<SynchedEntityData.DataValue<?>>();
+                    tracked.add(SynchedEntityData.DataValue.create(woolAccessor, raw));
+                    overlay.modifyRawTrackedData(tracked, player, false);
+                    byte clientData = (Byte) tracked.getFirst().value();
+                    helper.assertValueEqual(
+                            clientData & 15,
+                            DDPolymerSheepShaderPack.donorColor(color, sheared).getId(),
+                            color.getName() + " client metadata uses its native donor"
+                    );
+                    helper.assertValueEqual(
+                            (clientData & 16) != 0,
+                            sheared,
+                            color.getName() + " preserves the native sheared state"
+                    );
+                    helper.assertValueEqual(sheep.getColor(), color, "server keeps the exact authoritative color");
+
+                    double authoritativeScale = sheep.getScale();
+                    var attributes = new ArrayList<ClientboundUpdateAttributesPacket.AttributeSnapshot>();
+                    var scale = sheep.getAttribute(Attributes.SCALE);
+                    attributes.add(new ClientboundUpdateAttributesPacket.AttributeSnapshot(
+                            scale.getAttribute(),
+                            scale.getBaseValue(),
+                            scale.getModifiers()
+                    ));
+                    overlay.modifyRawEntityAttributeData(attributes, player, true);
+                    var snapshot = attributes.getFirst();
+                    var residue = snapshot.modifiers().stream()
+                            .filter(modifier -> modifier.id().equals(DyeDepot.modLoc("polymer/sheep_scale_residue")))
+                            .toList();
+                    helper.assertValueEqual(
+                            residue.size(),
+                            1,
+                            color.getName() + " has exactly one packet-only residue"
+                    );
+                    helper.assertValueEqual(
+                            residue.getFirst().operation(),
+                            AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL,
+                            color.getName() + " residue is applied after real scale modifiers"
+                    );
+                    double clientScale = snapshot.base();
+                    for (AttributeModifier modifier : snapshot.modifiers()) {
+                        if (modifier.operation() == AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL) {
+                            clientScale *= 1.0 + modifier.amount();
+                        }
+                    }
+                    helper.assertValueEqual(
+                            DDPolymerSheepShaderPack.decodeScaleClass(clientScale),
+                            DDPolymerSheepShaderPack.shaderClass(sheep),
+                            color.getName() + " packet carries the expected shader class"
+                    );
+                    helper.assertTrue(
+                            Float.floatToIntBits(sheep.getScale()) == Float.floatToIntBits((float) authoritativeScale),
+                            "packet encoding never changes server collision scale"
+                    );
+                }
+            }
+            helper.assertTrue(
+                    DDPolymerEntities.sheepWoolHolder(overlay) == null,
+                    "native shader path uses the real sheep model without display overlays"
+            );
+            helper.succeed();
+            return;
+        }
         ElementHolder holder = DDPolymerEntities.sheepWoolHolder(overlay);
         helper.assertTrue(holder != null, "custom sheep overlay creates a wool element holder");
         helper.assertValueEqual(holder.getElements().size(), 6, "custom sheep uses six independently posed wool parts");

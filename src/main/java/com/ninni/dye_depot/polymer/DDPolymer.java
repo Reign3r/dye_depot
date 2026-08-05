@@ -23,6 +23,7 @@ public final class DDPolymer {
         DDPolymerPack.register();
         DDPolymerCollarPack.register();
         DDPolymerSheepPack.register();
+        DDPolymerSheepShaderPack.register();
         PolymerResourcePackUtils.addModAssets(DyeDepot.MOD_ID);
         ResourcePackExtras.forDefault().addBridgedModelsFolder(DyeDepot.modLoc("block"), DyeDepot.modLoc("item"));
         PolymerResourcePackUtils.markAsRequired();

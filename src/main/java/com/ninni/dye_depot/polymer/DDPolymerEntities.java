@@ -12,11 +12,13 @@ import eu.pb4.polymer.virtualentity.api.ElementHolder;
 import eu.pb4.polymer.virtualentity.api.attachment.EntityAttachment;
 import eu.pb4.polymer.virtualentity.api.attachment.HolderAttachment;
 import eu.pb4.polymer.virtualentity.api.elements.ItemDisplayElement;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 import net.fabricmc.fabric.api.networking.v1.context.PacketContext;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
@@ -25,6 +27,9 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FontDescription;
 import net.minecraft.network.chat.Style;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
+import net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.Identifier;
@@ -35,6 +40,9 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.feline.Cat;
 import net.minecraft.world.entity.animal.feline.CatVariant;
 import net.minecraft.world.entity.animal.sheep.Sheep;
@@ -71,7 +79,9 @@ public final class DDPolymerEntities {
 
     public static byte vanillaSheepData(byte value) {
         DyeColor color = DyeColor.byId(value & 31);
-        return vanillaSheepData(value, DDDyes.isModDye(color));
+        boolean sheared = (value & 32) != 0;
+        DyeColor donor = DDPolymerSheepShaderPack.donorColor(color, sheared);
+        return (byte) (donor.getId() | (sheared ? 16 : 0));
     }
 
     static byte vanillaSheepData(byte value, boolean useVirtualWool) {
@@ -80,7 +90,9 @@ public final class DDPolymerEntities {
         // 26.2 renders a colored adult undercoat even while a sheep is sheared.
         // A white, sheared proxy suppresses both native layers; the virtual
         // model then supplies the exact outer wool and undercoat as applicable.
-        DyeColor vanilla = useVirtualWool ? DyeColor.WHITE : DDPolymerColors.vanillaColor(color);
+        DyeColor vanilla = useVirtualWool
+                ? DyeColor.WHITE
+                : DDPolymerSheepShaderPack.donorColor(color, sheared);
         return (byte) (vanilla.getId() | ((sheared || useVirtualWool) ? 16 : 0));
     }
 
@@ -136,6 +148,7 @@ public final class DDPolymerEntities {
     }
 
     private static final class SheepOverlay implements PolymerEntity {
+        private static final Identifier SCALE_RESIDUE_ID = DyeDepot.modLoc("polymer/sheep_scale_residue");
         private final Sheep sheep;
         private EntityAttachment woolAttachment;
 
@@ -160,14 +173,17 @@ public final class DDPolymerEntities {
                 if (value.id() == woolAccessor.id() && value.value() instanceof Byte raw) {
                     data.set(index, SynchedEntityData.DataValue.create(
                             woolAccessor,
-                            vanillaSheepData(raw, usesVirtualWool())
+                            DDPolymerSheepShaderPack.isEnabled()
+                                    ? vanillaSheepData(raw)
+                                    : vanillaSheepData(raw, usesVirtualWool())
                     ));
                     woolUpdated = true;
                 } else if (value.id() == nameAccessor.id()) {
                     nameUpdated = true;
                     if (value.value() instanceof Optional<?> optional
                             && optional.orElse(null) instanceof Component name
-                            && isJebName(name)) {
+                            && isJebName(name)
+                            && !DDPolymerSheepShaderPack.isEnabled()) {
                         data.set(index, SynchedEntityData.DataValue.create(
                                 nameAccessor,
                                 Optional.of(clientSafeJebName(name))
@@ -181,8 +197,62 @@ public final class DDPolymerEntities {
                 byte raw = sheep.getEntityData().get(woolAccessor);
                 data.add(SynchedEntityData.DataValue.create(
                         woolAccessor,
-                        vanillaSheepData(raw, usesVirtualWool())
+                        DDPolymerSheepShaderPack.isEnabled()
+                                ? vanillaSheepData(raw)
+                                : vanillaSheepData(raw, usesVirtualWool())
                 ));
+            }
+        }
+
+        @Override
+        public void modifyRawEntityAttributeData(
+                List<ClientboundUpdateAttributesPacket.AttributeSnapshot> data,
+                ServerPlayer player,
+                boolean initial
+        ) {
+            if (!DDPolymerSheepShaderPack.isEnabled()) {
+                return;
+            }
+            int shaderClass = DDPolymerSheepShaderPack.shaderClass(sheep);
+            double realScale = sheep.getScale();
+            double encodedScale = DDPolymerSheepShaderPack.encodeScale(realScale, shaderClass);
+            for (int index = 0; index < data.size(); index++) {
+                ClientboundUpdateAttributesPacket.AttributeSnapshot snapshot = data.get(index);
+                if (!snapshot.attribute().equals(Attributes.SCALE)) {
+                    continue;
+                }
+                List<AttributeModifier> modifiers = new ArrayList<>(snapshot.modifiers());
+                modifiers.removeIf(modifier -> modifier.id().equals(SCALE_RESIDUE_ID));
+                modifiers.add(new AttributeModifier(
+                        SCALE_RESIDUE_ID,
+                        encodedScale / realScale - 1.0,
+                        AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL
+                ));
+                data.set(index, new ClientboundUpdateAttributesPacket.AttributeSnapshot(
+                        snapshot.attribute(),
+                        snapshot.base(),
+                        List.copyOf(modifiers)
+                ));
+                return;
+            }
+            data.add(new ClientboundUpdateAttributesPacket.AttributeSnapshot(
+                    Attributes.SCALE,
+                    encodedScale,
+                    List.of()
+            ));
+        }
+
+        @Override
+        public void onEntityPacketSent(Consumer<Packet<?>> packetConsumer, Packet<?> packet) {
+            packetConsumer.accept(packet);
+            if (DDPolymerSheepShaderPack.isEnabled() && packet instanceof ClientboundSetEntityDataPacket) {
+                AttributeInstance scale = sheep.getAttribute(Attributes.SCALE);
+                if (scale != null) {
+                    // Use Polymer's supplied entity-bound consumer. Sending
+                    // directly through a connection loses the entity context,
+                    // so the codec cannot append the client-only residue.
+                    packetConsumer.accept(new ClientboundUpdateAttributesPacket(sheep.getId(), List.of(scale)));
+                }
             }
         }
 
@@ -209,7 +279,8 @@ public final class DDPolymerEntities {
         }
 
         private boolean usesVirtualWool() {
-            return DDDyes.isModDye(sheep.getColor()) || isJebSheep(sheep);
+            return !DDPolymerSheepShaderPack.isEnabled()
+                    && (DDDyes.isModDye(sheep.getColor()) || isJebSheep(sheep));
         }
 
         private synchronized ElementHolder woolHolder() {

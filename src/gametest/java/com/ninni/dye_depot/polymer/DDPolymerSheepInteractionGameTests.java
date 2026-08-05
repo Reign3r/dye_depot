@@ -1,17 +1,22 @@
 package com.ninni.dye_depot.polymer;
 
+import com.ninni.dye_depot.mixin.SheepDataAccessor;
 import com.ninni.dye_depot.registry.DDDyes;
 import com.ninni.dye_depot.registry.DDItems;
 import eu.pb4.polymer.core.api.entity.PolymerEntity;
 import eu.pb4.polymer.virtualentity.api.ElementHolder;
 import eu.pb4.polymer.virtualentity.api.elements.ItemDisplayElement;
+import java.util.ArrayList;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.util.ARGB;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.sheep.Sheep;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.ItemStack;
@@ -23,6 +28,7 @@ public final class DDPolymerSheepInteractionGameTests {
     @GameTest
     public void everyCustomDyeColorsSheepThroughRealInteraction(GameTestHelper helper) {
         var player = helper.makeMockServerPlayer(GameType.SURVIVAL);
+        var packetPlayer = helper.makeMockServerPlayerInLevel();
         Sheep sheep = helper.spawn(EntityTypes.SHEEP, new BlockPos(1, 2, 1));
         PolymerEntity overlay = PolymerEntity.get(sheep);
 
@@ -46,15 +52,46 @@ public final class DDPolymerSheepInteractionGameTests {
                     color.getName() + " sheep interaction consumes exactly one dye in survival"
             );
 
-            ElementHolder holder = DDPolymerEntities.sheepWoolHolder(overlay);
-            helper.assertTrue(holder != null, color.getName() + " creates the Polymer sheep coat");
-            holder.tick();
-            ItemDisplayElement head = (ItemDisplayElement) holder.getElements().getFirst();
-            helper.assertValueEqual(
-                    head.getItem().get(DataComponents.DYED_COLOR),
-                    new DyedItemColor(nativeSheepTint(color) & 0xFFFFFF),
-                    color.getName() + " coat carries the exact 26.2 sheep tint"
-            );
+            if (DDPolymerSheepShaderPack.isEnabled()) {
+                var woolAccessor = SheepDataAccessor.dyeDepot$getWoolData();
+                var tracked = new ArrayList<SynchedEntityData.DataValue<?>>();
+                tracked.add(SynchedEntityData.DataValue.create(
+                        woolAccessor,
+                        sheep.getEntityData().get(woolAccessor)
+                ));
+                overlay.modifyRawTrackedData(tracked, packetPlayer, false);
+                byte clientWool = (Byte) tracked.getFirst().value();
+                helper.assertValueEqual(
+                        clientWool & 15,
+                        DDPolymerSheepShaderPack.donorColor(color).getId(),
+                        color.getName() + " interaction selects the codec-safe native donor"
+                );
+                var attributes = new ArrayList<ClientboundUpdateAttributesPacket.AttributeSnapshot>();
+                overlay.modifyRawEntityAttributeData(attributes, packetPlayer, false);
+                var scale = attributes.stream()
+                        .filter(snapshot -> snapshot.attribute().equals(Attributes.SCALE))
+                        .findFirst()
+                        .orElseThrow();
+                helper.assertValueEqual(
+                        DDPolymerSheepShaderPack.decodeScaleClass(scale.base()),
+                        DDPolymerSheepShaderPack.shaderClass(color),
+                        color.getName() + " interaction selects the exact shader residue class"
+                );
+                helper.assertTrue(
+                        DDPolymerEntities.sheepWoolHolder(overlay) == null,
+                        color.getName() + " uses no display-entity coat"
+                );
+            } else {
+                ElementHolder holder = DDPolymerEntities.sheepWoolHolder(overlay);
+                helper.assertTrue(holder != null, color.getName() + " creates the Polymer sheep coat");
+                holder.tick();
+                ItemDisplayElement head = (ItemDisplayElement) holder.getElements().getFirst();
+                helper.assertValueEqual(
+                        head.getItem().get(DataComponents.DYED_COLOR),
+                        new DyedItemColor(nativeSheepTint(color) & 0xFFFFFF),
+                        color.getName() + " coat carries the exact 26.2 sheep tint"
+                );
+            }
 
             ItemStack duplicateDye = new ItemStack(DDItems.DYES.getOrThrow(color), 2);
             player.setItemInHand(InteractionHand.MAIN_HAND, duplicateDye);
@@ -70,6 +107,15 @@ public final class DDPolymerSheepInteractionGameTests {
         }
 
         ElementHolder holder = DDPolymerEntities.sheepWoolHolder(overlay);
+        if (DDPolymerSheepShaderPack.isEnabled()) {
+            helper.assertTrue(holder == null, "native shader mode leaves glow and outline to the real sheep renderer");
+            sheep.setGlowingTag(true);
+            helper.assertTrue(sheep.isCurrentlyGlowing(), "native sheep glow state remains authoritative");
+            sheep.setGlowingTag(false);
+            helper.assertFalse(sheep.isCurrentlyGlowing(), "native sheep glow state clears normally");
+            helper.succeed();
+            return;
+        }
         helper.assertTrue(holder != null, "custom sheep retains its coat for outline coverage");
         sheep.setGlowingTag(true);
         holder.tick();

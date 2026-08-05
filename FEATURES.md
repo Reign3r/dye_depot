@@ -371,18 +371,29 @@ carrier contention cannot prevent the combined server from starting.
 
 ### Entities, particles, sound, and maps
 
-- Sheep remain native sheep to the vanilla client. Their extended five-bit
-  metadata is rewritten to a codec-safe sheared value, while a six-part,
-  native-shaped virtual coat reconstructs the adult/baby head, body, and
-  four leg shapes with vanilla's white special case and 75-percent wool tint.
-  Adults retain the 26.2 undercoat after shearing while babies correctly have
-  no undercoat. Its parts follow body/head pose, eating offset, walking, color,
-  visibility, shearing/regrowth, age state, and visible glowing outlines. `jeb_`
-  sheep step across
-  all 32 registered colors on the native 25-tick cadence. Only the client copy
-  of the exact server name receives a zero-width suffix, suppressing the
-  duplicate native 16-color rainbow without changing authoritative name data.
-  Removing a sheep destroys the associated virtual attachment.
+- In the experimental shader path, sheep remain completely native sheep to the
+  vanilla client and allocate no display entities. Extended colors are sent as
+  non-white vanilla donor colors so the real adult/baby wool and adult
+  undercoat render calls remain present. A packet-only logarithmic `SCALE`
+  residue distinguishes custom color and sheared/unsheared state without
+  changing authoritative server scale, dimensions, or collision. Every wool
+  metadata update immediately carries an entity-bound scale packet through
+  Polymer, so a newly dyed sheep cannot remain on its donor color. Tagged
+  copies of the three vanilla sheep wool textures plus the adult and baby base
+  textures, and tightly guarded 26.2 `entity.vsh`/`entity.fsh` shaders, replace
+  only those donor tints with the exact 75-percent custom sheep RGB. While the
+  outer coat is present, only the enclosed inner-wool/base texels are hidden;
+  the exposed snout and lower legs remain native. Shearing restores the full
+  correctly tinted undercoat.
+  Native geometry and all walking, head/eating, shearing, undercoat,
+  invisibility, hurt-overlay, death-roll, and glow/outline behavior therefore
+  come from Minecraft's real sheep renderer. The initial experiment leaves
+  `jeb_` on its native 16-color client cycle while the per-viewer 32-color phase
+  transport is developed.
+- If another resource-pack contributor already owns either core entity shader,
+  pack generation logs the collision and disables the experiment instead of
+  overwriting it. The prior six-part articulated coat resources and runtime
+  path remain available only as that compatibility fallback.
 - Tamed cats and wolves retain the real tame bit and native animated model.
   Their packet overlay selects one of 640 synchronized, spawn-disabled client
   variants covering all 32 vanilla/custom collar colors across all 11 vanilla
@@ -441,10 +452,14 @@ carrier contention cannot prevent the combined server from starting.
   16 custom dyes with ownership, negative, consumption, persistence, synthetic
   exact-variant selection, tame-bit preservation, and server-state immutability; shulker lid
   animation, server collision, and display lighting; candle auto-tick and
-  vanilla flame offsets; and lazy adult/baby articulated sheep allocation,
-  posing, shearing, regrowth, visibility, cleanup, visible glowing outlines,
-  real survival dye interaction/consumption for all 16 custom dyes, and the exact
-  32-color `jeb_` cycle.
+  vanilla flame offsets; all 48 unique sheep donor/residue/sheared-state
+  combinations,
+  logarithmic scale round trips across the legal range, packet-only scale and
+  authoritative collision separation, same-pass entity-bound metadata
+  correction, native metadata shearing, zero-display shader mode, generated
+  shader/texture sentinels, inner-coat visibility masks, and face metrics, real
+  survival dye interaction/consumption for all 16 custom dyes, and the retained
+  articulated compatibility fallback.
 - Combined `runServer` startup, Polymer pack generation, and a connected
   vanilla-client visual/interaction pass remain the final acceptance gate; the
   standalone tests do not replace that combined check.
@@ -509,12 +524,18 @@ Fabric API. Copy `_My_Assets/options.txt` into the instance before testing.
   authoritative expanding collision must push/block entities like vanilla.
   Contents must survive and the item must be rejected from shulker-box slots
   and bundles; compare with a vanilla shulker.
-- [ ] Dye adult and baby sheep, then watch them idle, walk, turn their heads,
-  and eat grass. Shear/regrow both: an adult must retain only its correctly
-  tinted undercoat while a sheared baby has no coat. Name a sheep `jeb_` and
-  confirm the 32-color, 25-tick cycle with no second native rainbow layer. Give
-  a visible custom sheep the glowing flag and confirm its complete coat receives
-  the outline. Remove a custom sheep and confirm no orphaned parts remain. Dye an owned wolf and cat
+- [ ] For the shader experiment, dye adult and baby sheep with every custom
+  color and compare their geometry directly with vanilla controls while they
+  idle, walk, turn their heads, eat grass, take damage, die, become invisible,
+  and glow. Shear/regrow both: an adult must retain only its correctly tinted
+  native undercoat while a sheared baby has no coat. Check close and long range,
+  multiple FOVs, and any available graphics settings for donor-color flashes or
+  scale-residue instability. Walk the camera through an unsheared sheep and
+  confirm there is no duplicate torso, head, or upper-leg shell; the exposed
+  snout and lower legs must remain intact. Confirm no item-display passengers
+  or lagging wool parts exist. `jeb_` is expected to use the native 16-color cycle in this first
+  experiment; restoring the authored 32-color cycle is the remaining parity
+  gate after ordinary shader transport is visually accepted. Dye an owned wolf and cat
   collar with each of the 16 custom dyes; repeat representative vanilla/custom
   colors on adult and baby cats/wolves of every vanilla body variant. Verify
   the exact ordinary-state collar texture color, native movement/sitting/tame
@@ -558,20 +579,26 @@ and data remain exact:
   collar shares body wet/hurt shading and armor ordering instead of the native
   collar layer's independent overlay. Embedded 26.2 vanilla body/mask sources
   also do not inherit another server pack's replacement cat/wolf artwork.
-  Sheep have no native
-  RGB or variant field, so their exact coat is articulated with server-driven
-  item displays over a native sheared proxy. The banner itself remains a native block-entity
+  Sheep have no native RGB or variant field. The experimental path therefore
+  encodes color-range and coat-state classes in a client-only `SCALE` residue and
+  decodes it only for explicitly tagged sheep-wool textures in Minecraft's
+  global entity shader. Client visual scale is quantized by at most about 2.2
+  percent at the legal scale boundaries (about 1.1 percent at ordinary scales), while
+  authoritative server scale and collision remain unchanged.
+  Core shader overrides are not composable, so a detected prior owner triggers
+  the retained display fallback; client GPU/FOV/distance behavior still needs
+  the connected-client acceptance pass. The initial shader experiment does not
+  yet extend `jeb_` beyond its native 16-color cycle. The banner itself remains a native block-entity
   renderer, so its pole, cloth, base, and patterns retain the vanilla wave.
   The vanilla Loom counts visible layers and caps them at six, so its input
   slot temporarily shows the nearest vanilla carrier base when a custom banner
   already has exactly five authored layers. That narrowly scoped view omits the
   synthetic base so the sixth pattern remains selectable. The Loom result,
   normal inventory icon, and placed banner all retain the exact custom base.
-- Sheep item-display tint changes are server-tick updates rather than the
-  vanilla renderer's per-frame `jeb_` interpolation. Invisible glowing sheep can
-  expose only the native proxy outline, and the virtual coat is removed during
-  the death roll because those client-only root transforms cannot be reproduced
-  safely without a dedicated server-side pose implementation.
+- The articulated sheep implementation remains packaged only as the shader
+  collision fallback. In the enabled experiment, ordinary custom sheep use the
+  native renderer exclusively and do not inherit its pose/outline/death-roll
+  limitations.
 - Custom shulkers use authored-texture base/lid models. The server sends each
   real progress change and the vanilla client interpolates the lid translation
   and rotation between ticks, avoiding the former 11-frame snapping. The server
@@ -608,8 +635,9 @@ The 26.2 port is complete only when automated checks cover and pass:
 
 1. Enum bootstrap, metadata, codecs, and 32-value ordering.
 2. The complete 256-block/240-item registry manifest and associated registries.
-3. Sheep color/shearing/loot behavior plus adult, baby, and 32-color `jeb_`
-   Polymer visuals.
+3. Sheep color/shearing/loot behavior, native-shader adult/baby custom visuals,
+   and the retained 32-color server-side `jeb_` behavior (its vanilla-client
+   shader phase transport remains the experiment's open parity gate).
 4. Standard colored-block, basket, banner/map, shulker, bed/POI, and llama
    behavior, including real Loom results and custom-banner shield decoration
    with complete pattern parity.
