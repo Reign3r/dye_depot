@@ -123,6 +123,54 @@ class ClientResourceParityTest {
     }
 
     @Test
+    void generatedCollarVariantsCoverEveryVanillaBodyAndAll32Colors() {
+        List<String> cats = List.of(
+                "tabby", "black", "red", "siamese", "british_shorthair", "calico",
+                "persian", "ragdoll", "white", "jellie", "all_black"
+        );
+        var wolves = java.util.Map.ofEntries(
+                java.util.Map.entry("pale", "wolf"),
+                java.util.Map.entry("spotted", "wolf_spotted"),
+                java.util.Map.entry("snowy", "wolf_snowy"),
+                java.util.Map.entry("black", "wolf_black"),
+                java.util.Map.entry("ashen", "wolf_ashen"),
+                java.util.Map.entry("rusty", "wolf_rusty"),
+                java.util.Map.entry("woods", "wolf_woods"),
+                java.util.Map.entry("chestnut", "wolf_chestnut"),
+                java.util.Map.entry("striped", "wolf_striped")
+        );
+
+        String catRoot = "data/dye_depot/cat_variant/polymer/collar/cat/minecraft/";
+        String wolfRoot = "data/dye_depot/wolf_variant/polymer/collar/wolf/minecraft/";
+        assertEquals(11 * 32, jsonFilesUnder(catRoot).size());
+        assertEquals(9 * 32, jsonFilesUnder(wolfRoot).size());
+        for (String variant : cats) {
+            for (String color : ALL_COLORS) {
+                String texture = "dye_depot:entity/cat/collar/minecraft/" + variant + "/" + color;
+                JsonObject definition = json(catRoot + variant + "/" + color + ".json");
+                assertEquals(texture, definition.get("asset_id").getAsString());
+                assertEquals(texture + "_baby", definition.get("baby_asset_id").getAsString());
+                assertEquals(0, definition.getAsJsonArray("spawn_conditions").size());
+            }
+        }
+        wolves.forEach((variant, source) -> {
+            for (String color : ALL_COLORS) {
+                String texture = "dye_depot:entity/wolf/collar/minecraft/" + variant + "/" + color;
+                JsonObject definition = json(wolfRoot + variant + "/" + color + ".json");
+                JsonObject adult = definition.getAsJsonObject("assets");
+                JsonObject baby = definition.getAsJsonObject("baby_assets");
+                assertEquals("minecraft:entity/wolf/" + source, adult.get("wild").getAsString());
+                assertEquals("minecraft:entity/wolf/" + source + "_angry", adult.get("angry").getAsString());
+                assertEquals(texture + "/tame", adult.get("tame").getAsString());
+                assertEquals("minecraft:entity/wolf/" + source + "_baby", baby.get("wild").getAsString());
+                assertEquals("minecraft:entity/wolf/" + source + "_angry_baby", baby.get("angry").getAsString());
+                assertEquals(texture + "/tame_baby", baby.get("tame").getAsString());
+                assertEquals(0, definition.getAsJsonArray("spawn_conditions").size());
+            }
+        });
+    }
+
+    @Test
     void everyRegisteredBlockAndItemHasIts26Point2ClientDefinition() {
         for (String color : CUSTOM_COLORS) {
             for (String suffix : CUSTOM_BLOCK_SUFFIXES) {

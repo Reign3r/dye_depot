@@ -1,4 +1,5 @@
 import org.gradle.api.tasks.testing.Test
+import org.gradle.language.jvm.tasks.ProcessResources
 
 plugins {
     id("com.possible-triangle.fabric")
@@ -52,6 +53,126 @@ dependencies {
     // No 26.2 builds of these optional development/compatibility mods are available yet.
     // Their data and resource compatibility remains bundled in this mod.
     add("testImplementation", "net.fabricmc:fabric-loader-junit:${property("fabric_loader_version")}")
+}
+
+val collarColors =
+    listOf(
+        "white",
+        "orange",
+        "magenta",
+        "light_blue",
+        "yellow",
+        "lime",
+        "pink",
+        "gray",
+        "light_gray",
+        "cyan",
+        "purple",
+        "blue",
+        "brown",
+        "green",
+        "red",
+        "black",
+        "maroon",
+        "rose",
+        "coral",
+        "indigo",
+        "navy",
+        "slate",
+        "olive",
+        "amber",
+        "beige",
+        "teal",
+        "mint",
+        "aqua",
+        "verdant",
+        "forest",
+        "ginger",
+        "tan",
+    )
+val catCollarVariants =
+    listOf(
+        "tabby",
+        "black",
+        "red",
+        "siamese",
+        "british_shorthair",
+        "calico",
+        "persian",
+        "ragdoll",
+        "white",
+        "jellie",
+        "all_black",
+    )
+val wolfCollarVariants =
+    linkedMapOf(
+        "pale" to "wolf",
+        "spotted" to "wolf_spotted",
+        "snowy" to "wolf_snowy",
+        "black" to "wolf_black",
+        "ashen" to "wolf_ashen",
+        "rusty" to "wolf_rusty",
+        "woods" to "wolf_woods",
+        "chestnut" to "wolf_chestnut",
+        "striped" to "wolf_striped",
+    )
+val generatedCollarVariants = layout.buildDirectory.dir("generated/resources/collar-variants")
+val generateCollarVariants by tasks.registering {
+    inputs.property("colors", collarColors)
+    inputs.property("catVariants", catCollarVariants)
+    inputs.property("wolfVariants", wolfCollarVariants)
+    outputs.dir(generatedCollarVariants)
+
+    doLast {
+        val root = generatedCollarVariants.get().asFile
+        require(
+            root.toPath().startsWith(
+                layout.buildDirectory
+                    .get()
+                    .asFile
+                    .toPath(),
+            ),
+        )
+        project.delete(root)
+        catCollarVariants.forEach { variant ->
+            collarColors.forEach { color ->
+                val texture = "dye_depot:entity/cat/collar/minecraft/$variant/$color"
+                val target =
+                    root.resolve(
+                        "data/dye_depot/cat_variant/polymer/collar/cat/minecraft/$variant/$color.json",
+                    )
+                target.parentFile.mkdirs()
+                target.writeText(
+                    """{"asset_id":"$texture","baby_asset_id":"${texture}_baby","spawn_conditions":[]}""",
+                )
+            }
+        }
+        wolfCollarVariants.forEach { (variant, source) ->
+            collarColors.forEach { color ->
+                val texture = "dye_depot:entity/wolf/collar/minecraft/$variant/$color"
+                val target =
+                    root.resolve(
+                        "data/dye_depot/wolf_variant/polymer/collar/wolf/minecraft/$variant/$color.json",
+                    )
+                target.parentFile.mkdirs()
+                target.writeText(
+                    """{"assets":{"wild":"minecraft:entity/wolf/$source","tame":"$texture/tame","angry":"minecraft:entity/wolf/${source}_angry"},"baby_assets":{"wild":"minecraft:entity/wolf/${source}_baby","tame":"$texture/tame_baby","angry":"minecraft:entity/wolf/${source}_angry_baby"},"spawn_conditions":[]}""",
+                )
+            }
+        }
+    }
+}
+
+sourceSets.named("main") {
+    resources.srcDir(generatedCollarVariants)
+}
+
+tasks.named<ProcessResources>("processResources") {
+    dependsOn(generateCollarVariants)
+}
+
+tasks.named("sourcesJar") {
+    dependsOn(generateCollarVariants)
 }
 
 val testRuntimeDirectory =

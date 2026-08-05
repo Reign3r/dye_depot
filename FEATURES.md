@@ -79,7 +79,8 @@ behavior.
   merely its Polymer client carrier.
 - The Loom produces a real patterned-banner result for every custom dye,
   records the exact custom pattern color, and consumes one banner and one dye
-  when the result is taken.
+  when the result is taken. Five authored layers can receive the vanilla sixth
+  layer, while the server rejects any button packet that attempts a seventh.
 - Owned cats and wolves accept every custom dye and retain the exact custom
   collar color in authoritative server state.
 - `DyeItem` color lookup resolves each custom color to the matching item.
@@ -382,10 +383,21 @@ carrier contention cannot prevent the combined server from starting.
   of the exact server name receives a zero-width suffix, suppressing the
   duplicate native 16-color rainbow without changing authoritative name data.
   Removing a sheep destroys the associated virtual attachment.
-- Cat and wolf collar metadata is mapped to the nearest vanilla client color;
-  the exact custom value remains authoritative on the server. Their packet
-  overlays leave sheep, cat, and wolf as client-visible vanilla registry
-  entries so later vanilla entity IDs cannot shift during registry sync.
+- Tamed cats and wolves retain the real tame bit and native animated model.
+  Their packet overlay selects one of 640 synchronized, spawn-disabled client
+  variants covering all 32 vanilla/custom collar colors across all 11 vanilla
+  cat and nine vanilla wolf bodies. The Polymer pack bakes the exact native
+  collar mask into 1,280 adult/baby body textures and makes the four native
+  collar-layer masks transparent, so there is no display entity or RGB color
+  approximation in the ordinary dry, unhurt, unarmored render state.
+  Authoritative collar color and body variant remain untouched
+  on the server. Unknown third-party variants pass through safely instead of
+  being remapped to a missing synthetic entry. Because the required pack makes
+  the four shared vanilla collar masks globally transparent, however, those
+  unsupported variants have no visible collar until their body textures are
+  added to the generated composite integration. Sheep, cat, and wolf remain
+  client-visible vanilla entity registry entries so later vanilla entity IDs
+  cannot shift during registry sync.
 - Dye-basket poofs retain their exact RGB through a vanilla dust-particle
   overlay. The basket sound has a vanilla-safe Polymer sound overlay.
 - Custom banner map decorations are exposed as the nearest vanilla banner
@@ -406,7 +418,8 @@ carrier contention cannot prevent the combined server from starting.
   banner-base registry entries/textures, non-occluding glass,
   exact carpet/candle collision parity, all 16 pane masks and their face UVs,
   native banner carrier/state parity, split shulker shell models, exposed-interior UVs,
-  and hidden donors,
+  hidden donors, all 640 synchronized collar-variant definitions, all 1,280
+  exact adult/baby collar composites, and four transparent native collar masks,
   distinct banner/shield base textures, both exact-pattern atlases, every
   256-entry compensated palette, all 43 built-in mask references, exact sign RGB
   for all 16 colors across glow states, regular/hanging types, both faces,
@@ -419,11 +432,13 @@ carrier contention cannot prevent the combined server from starting.
   43 × 16 exact inline-pattern combinations through the real stream codec,
   including zero/multiple layers and nested bundle/charged-projectile recovery;
   exact outbound-to-real Polymer item round trips; exact client-only
-  banner-base injection and tooltip hiding; six-slot Loom capacity; native
+  banner-base injection and tooltip hiding; real five-to-six Loom creation,
+  exact consumption, and server-side seventh-layer rejection; native
   standing/wall banner carrier and exact-color update-tag behavior; real
   standing/hanging sign dye and glow-ink interactions on both faces; exact sign
   RGB, consumption, and persistence; actual cat/wolf dye interactions for all
-  16 custom dyes with ownership, negative, consumption, and persistence cases; shulker lid
+  16 custom dyes with ownership, negative, consumption, persistence, synthetic
+  exact-variant selection, tame-bit preservation, and server-state immutability; shulker lid
   animation, server collision, and display lighting; candle auto-tick and
   vanilla flame offsets; and lazy adult/baby articulated sheep allocation,
   posing, shearing, regrowth, visibility, cleanup, visible glowing outlines,
@@ -464,7 +479,8 @@ Fabric API. Copy `_My_Assets/options.txt` into the instance before testing.
   four custom candles and vanilla candles: light levels must remain 3/6/9/12
   (candle cake 3), with no fullbright display.
 - [ ] In a Loom, apply each of the 16 custom dyes to a banner, explicitly add
-  a sixth authored pattern to a five-pattern custom banner, duplicate a
+  a sixth authored pattern to a five-pattern custom banner, reinsert it and
+  confirm a seventh cannot be selected or produced, duplicate a
   patterned banner, wash it in a cauldron, and place it
   standing and on a wall. Layers must appear and update/remove without a raw
   color, synthetic tooltip line, or crash. Compare all 16 vanilla and 16 custom
@@ -498,9 +514,14 @@ Fabric API. Copy `_My_Assets/options.txt` into the instance before testing.
   confirm the 32-color, 25-tick cycle with no second native rainbow layer. Give
   a visible custom sheep the glowing flag and confirm its complete coat receives
   the outline. Remove a custom sheep and confirm no orphaned parts remain. Dye an owned wolf and cat
-  collar with each of the 16 custom dyes; equip a llama with custom carpet;
-  place/use beds and let a villager claim one. Verify the documented safe
-  nearest collar tint and exact sheep/llama/bed models.
+  collar with each of the 16 custom dyes; repeat representative vanilla/custom
+  colors on adult and baby cats/wolves of every vanilla body variant. Verify
+  the exact ordinary-state collar texture color, native movement/sitting/tame
+  behavior, and no duplicate collar layer. Also compare a cat's collar edge
+  and a wolf while wet, hurt-flashing, and armored against a vanilla control;
+  these cases exercise the documented baked-layer differences below. Equip a
+  llama with custom carpet; place/use beds and let a
+  villager claim one. Verify the exact collar/sheep/llama/bed models.
 - [ ] Trigger basket poofs/sound from the top with a falling entity/projectile
   and while inside. Side/bottom projectile controls must not trigger the main
   burst. Confirm exact dust RGB and the documented non-legacy sprite shape.
@@ -528,8 +549,15 @@ and data remain exact:
   masks, avoiding the enum without changing server data. The white carrier's
   `0xF9FFFE` multiplier imposes a six-level ceiling only on otherwise-255 red;
   all representable channels are compensated exactly. Sign glyphs bypass the
-  enum limitation through exact RGB component styles, but the native glow outline,
-  collars, and map markers retain the safe nearest tint. Sheep have no native
+  enum limitation through exact RGB component styles. Cat/wolf collars bypass
+  it with synchronized body variants whose ordinary-state textures use the
+  exact native mask and dye RGB, while the native glow outline and map markers
+  retain the safe nearest tint. Baking the collar into that body texture means
+  a cat loses the native collar layer's tiny geometry inflation, and a wolf's
+  collar shares body wet/hurt shading and armor ordering instead of the native
+  collar layer's independent overlay. Embedded 26.2 vanilla body/mask sources
+  also do not inherit another server pack's replacement cat/wolf artwork.
+  Sheep have no native
   RGB or variant field, so their exact coat is articulated with server-driven
   item displays over a native sheared proxy. The banner itself remains a native block-entity
   renderer, so its pole, cloth, base, and patterns retain the vanilla wave.

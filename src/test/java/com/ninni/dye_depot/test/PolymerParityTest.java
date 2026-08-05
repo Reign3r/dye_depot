@@ -143,6 +143,10 @@ class PolymerParityTest {
                 for (String target : List.of("banner", "shield")) {
                     lateBuilder.addData(latePatternPath(target, "late_prefinish"), mask);
                 }
+                // Simulate a normal contributor restoring a vanilla collar
+                // texture at the latest ordinary lifecycle point. Dye Depot's
+                // after-default pre-finish task must still win.
+                lateBuilder.addData("assets/minecraft/textures/entity/cat/cat_collar.png", mask);
             });
         });
     }
@@ -882,6 +886,92 @@ class PolymerParityTest {
             assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/donor_brown_shulker_base.json"));
             assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/donor_brown_shulker_lid.json"));
             assertNotNull(zip.getEntry("assets/dye_depot/textures/block/polymer/shulker_donor_brown.png"));
+
+            for (String maskPath : List.of(
+                    "assets/minecraft/textures/entity/cat/cat_collar.png",
+                    "assets/minecraft/textures/entity/cat/cat_collar_baby.png",
+                    "assets/minecraft/textures/entity/wolf/wolf_collar.png",
+                    "assets/minecraft/textures/entity/wolf/wolf_collar_baby.png"
+            )) {
+                var mask = ImageIO.read(zip.getInputStream(zip.getEntry(maskPath)));
+                assertNotNull(mask, maskPath);
+                for (int y = 0; y < mask.getHeight(); y++) {
+                    for (int x = 0; x < mask.getWidth(); x++) {
+                        assertEquals(0, ARGB.alpha(mask.getRGB(x, y)), maskPath + " at " + x + ',' + y);
+                    }
+                }
+            }
+
+            List<String> catVariants = List.of(
+                    "tabby", "black", "red", "siamese", "british_shorthair", "calico",
+                    "persian", "ragdoll", "white", "jellie", "all_black"
+            );
+            List<String> wolfVariants = List.of(
+                    "pale", "spotted", "snowy", "black", "ashen", "rusty", "woods", "chestnut", "striped"
+            );
+            for (String variant : catVariants) {
+                for (DyeColor color : DyeColor.values()) {
+                    String root = "assets/dye_depot/textures/entity/cat/collar/minecraft/"
+                            + variant + "/" + color.getName();
+                    assertNotNull(zip.getEntry(root + ".png"), root);
+                    assertNotNull(zip.getEntry(root + "_baby.png"), root + " baby");
+                }
+            }
+            for (String variant : wolfVariants) {
+                for (DyeColor color : DyeColor.values()) {
+                    String root = "assets/dye_depot/textures/entity/wolf/collar/minecraft/"
+                            + variant + "/" + color.getName();
+                    assertNotNull(zip.getEntry(root + "/tame.png"), root);
+                    assertNotNull(zip.getEntry(root + "/tame_baby.png"), root + " baby");
+                }
+            }
+            assertEquals(
+                    11 * 32 * 2,
+                    zip.stream().filter(entry -> !entry.isDirectory()
+                            && entry.getName().startsWith(
+                                    "assets/dye_depot/textures/entity/cat/collar/minecraft/"
+                            )).count(),
+                    "all cat bodies, ages, and collar colors"
+            );
+            assertEquals(
+                    9 * 32 * 2,
+                    zip.stream().filter(entry -> !entry.isDirectory()
+                            && entry.getName().startsWith(
+                                    "assets/dye_depot/textures/entity/wolf/collar/minecraft/"
+                            )).count(),
+                    "all wolf bodies, ages, and collar colors"
+            );
+            for (DyeColor color : DyeColor.values()) {
+                int tint = color.getTextureDiffuseColor();
+                var catCollar = ImageIO.read(zip.getInputStream(zip.getEntry(
+                        "assets/dye_depot/textures/entity/cat/collar/minecraft/tabby/"
+                                + color.getName() + ".png"
+                )));
+                assertEquals(
+                        ARGB.color(
+                                255,
+                                Math.round(186 * ARGB.red(tint) / 255.0f),
+                                Math.round(186 * ARGB.green(tint) / 255.0f),
+                                Math.round(186 * ARGB.blue(tint) / 255.0f)
+                        ),
+                        catCollar.getRGB(26, 3),
+                        color.getName() + " cat collar uses the exact native mask shade"
+                );
+                var wolfCollar = ImageIO.read(zip.getInputStream(zip.getEntry(
+                        "assets/dye_depot/textures/entity/wolf/collar/minecraft/pale/"
+                                + color.getName() + "/tame.png"
+                )));
+                assertEquals(
+                        ARGB.color(
+                                255,
+                                Math.round(202 * ARGB.red(tint) / 255.0f),
+                                Math.round(202 * ARGB.green(tint) / 255.0f),
+                                Math.round(202 * ARGB.blue(tint) / 255.0f)
+                        ),
+                        wolfCollar.getRGB(28, 0),
+                        color.getName() + " wolf collar uses the exact native mask shade"
+                );
+            }
 
             Map<String, String> sheepTextureHashes = Map.of(
                     "sheep_wool", "4f76a7d14c8248288e7ad1bc73ea76bd509c19c828dd02268453406fd59d961c",

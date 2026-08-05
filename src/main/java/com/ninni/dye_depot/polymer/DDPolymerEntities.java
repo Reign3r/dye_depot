@@ -18,18 +18,28 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import net.fabricmc.fabric.api.networking.v1.context.PacketContext;
+import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FontDescription;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.ARGB;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.TamableAnimal;
+import net.minecraft.world.entity.animal.feline.Cat;
+import net.minecraft.world.entity.animal.feline.CatVariant;
 import net.minecraft.world.entity.animal.sheep.Sheep;
+import net.minecraft.world.entity.animal.wolf.Wolf;
+import net.minecraft.world.entity.animal.wolf.WolfVariant;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
@@ -53,10 +63,10 @@ public final class DDPolymerEntities {
         PolymerEntityUtils.registerPolymerEntityConstructor(EntityTypes.SHEEP, SheepOverlay::new);
         PolymerEntityUtils.registerPolymerEntityConstructor(
                 EntityTypes.CAT,
-                cat -> new CollarOverlay(EntityTypes.CAT, CatDataAccessor.dyeDepot$getCollarData()));
+                cat -> new CatCollarOverlay((Cat) cat));
         PolymerEntityUtils.registerPolymerEntityConstructor(
                 EntityTypes.WOLF,
-                wolf -> new CollarOverlay(EntityTypes.WOLF, WolfDataAccessor.dyeDepot$getCollarData()));
+                wolf -> new WolfCollarOverlay((Wolf) wolf));
     }
 
     public static byte vanillaSheepData(byte value) {
@@ -75,7 +85,16 @@ public final class DDPolymerEntities {
     }
 
     public static int vanillaCollarData(int value) {
-        return DDPolymerColors.vanillaColor(DyeColor.byId(value)).getId();
+        // The native collar masks are transparent in the generated Polymer
+        // pack. A fixed in-range value keeps the vanilla client decoder safe;
+        // the exact 32-color collar is baked into the synchronized variant.
+        return DyeColor.RED.getId();
+    }
+
+    static Identifier collarVariantId(String entityType, ResourceKey<?> originalVariant, DyeColor color) {
+        Identifier original = originalVariant.identifier();
+        return DyeDepot.modLoc("polymer/collar/" + entityType + "/"
+                + original.getNamespace() + "/" + original.getPath() + "/" + color.getName());
     }
 
     private static boolean isJebSheep(Sheep sheep) {
@@ -214,7 +233,28 @@ public final class DDPolymerEntities {
         }
     }
 
-    private record CollarOverlay(EntityType<?> type, EntityDataAccessor<Integer> accessor) implements PolymerEntity {
+    private abstract static class CollarOverlay<V> implements PolymerEntity {
+        private final TamableAnimal animal;
+        private final EntityType<?> type;
+        private final EntityDataAccessor<Integer> collarAccessor;
+        private final EntityDataAccessor<Holder<V>> variantAccessor;
+
+        private CollarOverlay(
+                TamableAnimal animal,
+                EntityType<?> type,
+                EntityDataAccessor<Integer> collarAccessor,
+                EntityDataAccessor<Holder<V>> variantAccessor
+        ) {
+            this.animal = animal;
+            this.type = type;
+            this.collarAccessor = collarAccessor;
+            this.variantAccessor = variantAccessor;
+        }
+
+        protected abstract ResourceKey<Registry<V>> registryKey();
+
+        protected abstract String variantType();
+
         @Override
         public EntityType<?> getPolymerEntityType(PacketContext context) {
             return type;
@@ -222,12 +262,88 @@ public final class DDPolymerEntities {
 
         @Override
         public void modifyRawTrackedData(List<SynchedEntityData.DataValue<?>> data, ServerPlayer player, boolean initial) {
+            int rawCollar = animal.getEntityData().get(collarAccessor);
+            Holder<V> originalVariant = animal.getEntityData().get(variantAccessor);
+            Holder<V> clientVariant = clientVariant(originalVariant, DyeColor.byId(rawCollar));
+            boolean variantUpdated = false;
             for (int index = 0; index < data.size(); index++) {
                 SynchedEntityData.DataValue<?> value = data.get(index);
-                if (value.id() == accessor.id() && value.value() instanceof Integer raw) {
-                    data.set(index, SynchedEntityData.DataValue.create(accessor, vanillaCollarData(raw)));
+                if (value.id() == collarAccessor.id() && value.value() instanceof Integer) {
+                    data.set(index, SynchedEntityData.DataValue.create(
+                            collarAccessor,
+                            vanillaCollarData(rawCollar)
+                    ));
+                } else if (value.id() == variantAccessor.id()) {
+                    data.set(index, SynchedEntityData.DataValue.create(variantAccessor, clientVariant));
+                    variantUpdated = true;
                 }
             }
+            // Collar changes and tame-state changes do not dirty the variant
+            // accessor. Send it alongside every metadata update so the body
+            // texture always follows the authoritative server collar/state.
+            if (!variantUpdated) {
+                data.add(SynchedEntityData.DataValue.create(variantAccessor, clientVariant));
+            }
+        }
+
+        private Holder<V> clientVariant(Holder<V> original, DyeColor collarColor) {
+            if (!animal.isTame()) {
+                return original;
+            }
+            Optional<ResourceKey<V>> originalKey = original.unwrapKey();
+            if (originalKey.isEmpty()) {
+                return original;
+            }
+            if (!DDPolymerCollarPack.supportsVariant(variantType(), originalKey.get().identifier())) {
+                return original;
+            }
+            Identifier syntheticId = collarVariantId(variantType(), originalKey.get(), collarColor);
+            Registry<V> registry = animal.registryAccess().lookupOrThrow(registryKey());
+            return registry.get(ResourceKey.create(registryKey(), syntheticId))
+                    .<Holder<V>>map(holder -> holder)
+                    .orElse(original);
+        }
+    }
+
+    private static final class CatCollarOverlay extends CollarOverlay<CatVariant> {
+        private CatCollarOverlay(Cat cat) {
+            super(
+                    cat,
+                    EntityTypes.CAT,
+                    CatDataAccessor.dyeDepot$getCollarData(),
+                    CatDataAccessor.dyeDepot$getVariantData()
+            );
+        }
+
+        @Override
+        protected ResourceKey<Registry<CatVariant>> registryKey() {
+            return Registries.CAT_VARIANT;
+        }
+
+        @Override
+        protected String variantType() {
+            return "cat";
+        }
+    }
+
+    private static final class WolfCollarOverlay extends CollarOverlay<WolfVariant> {
+        private WolfCollarOverlay(Wolf wolf) {
+            super(
+                    wolf,
+                    EntityTypes.WOLF,
+                    WolfDataAccessor.dyeDepot$getCollarData(),
+                    WolfDataAccessor.dyeDepot$getVariantData()
+            );
+        }
+
+        @Override
+        protected ResourceKey<Registry<WolfVariant>> registryKey() {
+            return Registries.WOLF_VARIANT;
+        }
+
+        @Override
+        protected String variantType() {
+            return "wolf";
         }
     }
 

@@ -28,6 +28,7 @@ import net.fabricmc.fabric.api.networking.v1.context.PacketContext;
 import net.fabricmc.fabric.impl.networking.context.PacketContextImpl;
 import net.fabricmc.fabric.mixin.networking.accessor.ServerCommonPacketListenerImplAccessor;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -1209,21 +1210,55 @@ public final class DDPolymerEntityGameTests {
                     color,
                     color.getName() + " remains exact on the server cat"
             );
-            var catData = new ArrayList<SynchedEntityData.DataValue<?>>();
-            catData.add(SynchedEntityData.DataValue.create(
-                    CatDataAccessor.dyeDepot$getCollarData(),
-                    color.getId()
-            ));
-            PolymerEntity.get(cat).modifyRawTrackedData(catData, player, false);
+            var originalCatVariant = cat.getEntityData().get(CatDataAccessor.dyeDepot$getVariantData());
+            var catData = new ArrayList<>(Optional.ofNullable(cat.getEntityData().getNonDefaultValues()).orElseThrow());
+            var catTameData = catData.stream()
+                    .filter(value -> value.value() instanceof Byte flags && (flags & 4) != 0)
+                    .findFirst()
+                    .orElseThrow();
+            PolymerEntity.get(cat).modifyRawTrackedData(catData, player, true);
             helper.assertValueEqual(
-                    catData.getFirst().value(),
+                    catData.stream()
+                            .filter(value -> value.id() == CatDataAccessor.dyeDepot$getCollarData().id())
+                            .findFirst()
+                            .orElseThrow()
+                            .value(),
                     DDPolymerEntities.vanillaCollarData(color.getId()),
-                    color.getName() + " cat collar packet uses the intended protocol-safe color"
+                    color.getName() + " cat collar packet uses the transparent protocol-safe donor"
+            );
+            var clientCatVariantData = catData.stream()
+                    .filter(value -> value.id() == CatDataAccessor.dyeDepot$getVariantData().id())
+                    .findFirst()
+                    .orElseThrow();
+            helper.assertTrue(clientCatVariantData.value() instanceof Holder<?>, "cat packet has a holder variant");
+            Holder<?> clientCatVariant = (Holder<?>) clientCatVariantData.value();
+            helper.assertValueEqual(
+                    clientCatVariant.unwrapKey().orElseThrow().identifier(),
+                    DDPolymerEntities.collarVariantId(
+                            "cat",
+                            originalCatVariant.unwrapKey().orElseThrow(),
+                            color
+                    ),
+                    color.getName() + " cat packet selects the exact synthetic collar variant"
+            );
+            helper.assertValueEqual(
+                    catData.stream()
+                            .filter(value -> value.id() == catTameData.id())
+                            .findFirst()
+                            .orElseThrow()
+                            .value(),
+                    catTameData.value(),
+                    color.getName() + " cat packet preserves the native tame bit"
             );
             helper.assertValueEqual(
                     cat.getCollarColor(),
                     color,
                     color.getName() + " cat packet conversion does not mutate server state"
+            );
+            helper.assertValueEqual(
+                    cat.getEntityData().get(CatDataAccessor.dyeDepot$getVariantData()),
+                    originalCatVariant,
+                    color.getName() + " cat packet conversion does not mutate the server variant"
             );
 
             player.setItemInHand(
@@ -1239,23 +1274,243 @@ public final class DDPolymerEntityGameTests {
                     color,
                     color.getName() + " remains exact on the server wolf"
             );
-            var wolfData = new ArrayList<SynchedEntityData.DataValue<?>>();
-            wolfData.add(SynchedEntityData.DataValue.create(
-                    WolfDataAccessor.dyeDepot$getCollarData(),
-                    color.getId()
-            ));
-            PolymerEntity.get(wolf).modifyRawTrackedData(wolfData, player, false);
+            var originalWolfVariant = wolf.getEntityData().get(WolfDataAccessor.dyeDepot$getVariantData());
+            var wolfData = new ArrayList<>(Optional.ofNullable(wolf.getEntityData().getNonDefaultValues()).orElseThrow());
+            var wolfTameData = wolfData.stream()
+                    .filter(value -> value.value() instanceof Byte flags && (flags & 4) != 0)
+                    .findFirst()
+                    .orElseThrow();
+            PolymerEntity.get(wolf).modifyRawTrackedData(wolfData, player, true);
             helper.assertValueEqual(
-                    wolfData.getFirst().value(),
+                    wolfData.stream()
+                            .filter(value -> value.id() == WolfDataAccessor.dyeDepot$getCollarData().id())
+                            .findFirst()
+                            .orElseThrow()
+                            .value(),
                     DDPolymerEntities.vanillaCollarData(color.getId()),
-                    color.getName() + " wolf collar packet uses the intended protocol-safe color"
+                    color.getName() + " wolf collar packet uses the transparent protocol-safe donor"
+            );
+            var clientWolfVariantData = wolfData.stream()
+                    .filter(value -> value.id() == WolfDataAccessor.dyeDepot$getVariantData().id())
+                    .findFirst()
+                    .orElseThrow();
+            helper.assertTrue(clientWolfVariantData.value() instanceof Holder<?>, "wolf packet has a holder variant");
+            Holder<?> clientWolfVariant = (Holder<?>) clientWolfVariantData.value();
+            helper.assertValueEqual(
+                    clientWolfVariant.unwrapKey().orElseThrow().identifier(),
+                    DDPolymerEntities.collarVariantId(
+                            "wolf",
+                            originalWolfVariant.unwrapKey().orElseThrow(),
+                            color
+                    ),
+                    color.getName() + " wolf packet selects the exact synthetic collar variant"
+            );
+            helper.assertValueEqual(
+                    wolfData.stream()
+                            .filter(value -> value.id() == wolfTameData.id())
+                            .findFirst()
+                            .orElseThrow()
+                            .value(),
+                    wolfTameData.value(),
+                    color.getName() + " wolf packet preserves the native tame bit"
             );
             helper.assertValueEqual(
                     wolf.getCollarColor(),
                     color,
                     color.getName() + " wolf packet conversion does not mutate server state"
             );
+            helper.assertValueEqual(
+                    wolf.getEntityData().get(WolfDataAccessor.dyeDepot$getVariantData()),
+                    originalWolfVariant,
+                    color.getName() + " wolf packet conversion does not mutate the server variant"
+            );
         }
+
+        cat.getEntityData().packDirty();
+        DyeColor incrementalCatColor = DDDyes.MAROON.get();
+        cat.getEntityData().set(CatDataAccessor.dyeDepot$getCollarData(), incrementalCatColor.getId());
+        var catCollarOnly = new ArrayList<>(Optional.ofNullable(cat.getEntityData().packDirty()).orElseThrow());
+        helper.assertTrue(
+                catCollarOnly.stream().anyMatch(value -> value.id() == CatDataAccessor.dyeDepot$getCollarData().id())
+                        && catCollarOnly.stream().noneMatch(value -> value.id() == CatDataAccessor.dyeDepot$getVariantData().id()),
+                "the authoritative cat collar transition does not dirty its body variant"
+        );
+        PolymerEntity.get(cat).modifyRawTrackedData(catCollarOnly, player, false);
+        Holder<?> incrementalCatVariant = (Holder<?>) catCollarOnly.stream()
+                .filter(value -> value.id() == CatDataAccessor.dyeDepot$getVariantData().id())
+                .findFirst()
+                .orElseThrow()
+                .value();
+        helper.assertValueEqual(
+                incrementalCatVariant.unwrapKey().orElseThrow().identifier(),
+                DDPolymerEntities.collarVariantId(
+                        "cat",
+                        cat.getEntityData().get(CatDataAccessor.dyeDepot$getVariantData()).unwrapKey().orElseThrow(),
+                        incrementalCatColor
+                ),
+                "a collar-only cat update appends the exact synthetic body variant"
+        );
+
+        wolf.getEntityData().packDirty();
+        DyeColor incrementalWolfColor = DDDyes.ROSE.get();
+        wolf.getEntityData().set(WolfDataAccessor.dyeDepot$getCollarData(), incrementalWolfColor.getId());
+        var wolfCollarOnly = new ArrayList<>(Optional.ofNullable(wolf.getEntityData().packDirty()).orElseThrow());
+        helper.assertTrue(
+                wolfCollarOnly.stream().anyMatch(value -> value.id() == WolfDataAccessor.dyeDepot$getCollarData().id())
+                        && wolfCollarOnly.stream().noneMatch(value -> value.id() == WolfDataAccessor.dyeDepot$getVariantData().id()),
+                "the authoritative wolf collar transition does not dirty its body variant"
+        );
+        PolymerEntity.get(wolf).modifyRawTrackedData(wolfCollarOnly, player, false);
+        Holder<?> incrementalWolfVariant = (Holder<?>) wolfCollarOnly.stream()
+                .filter(value -> value.id() == WolfDataAccessor.dyeDepot$getVariantData().id())
+                .findFirst()
+                .orElseThrow()
+                .value();
+        helper.assertValueEqual(
+                incrementalWolfVariant.unwrapKey().orElseThrow().identifier(),
+                DDPolymerEntities.collarVariantId(
+                        "wolf",
+                        wolf.getEntityData().get(WolfDataAccessor.dyeDepot$getVariantData()).unwrapKey().orElseThrow(),
+                        incrementalWolfColor
+                ),
+                "a collar-only wolf update appends the exact synthetic body variant"
+        );
+
+        cat.setTame(false, false);
+        var catUntameData = new ArrayList<>(Optional.ofNullable(cat.getEntityData().packDirty()).orElseThrow());
+        var catUntameFlags = catUntameData.stream()
+                .filter(value -> value.value() instanceof Byte)
+                .findFirst()
+                .orElseThrow();
+        helper.assertTrue(((Byte) catUntameFlags.value() & 4) == 0, "cat untame transition clears the native tame bit");
+        PolymerEntity.get(cat).modifyRawTrackedData(catUntameData, player, false);
+        helper.assertValueEqual(
+                catUntameData.stream().filter(value -> value.id() == catUntameFlags.id()).findFirst().orElseThrow().value(),
+                catUntameFlags.value(),
+                "cat untame packet retains the native flag byte"
+        );
+        helper.assertValueEqual(
+                catUntameData.stream()
+                        .filter(value -> value.id() == CatDataAccessor.dyeDepot$getVariantData().id())
+                        .findFirst()
+                        .orElseThrow()
+                        .value(),
+                cat.getEntityData().get(CatDataAccessor.dyeDepot$getVariantData()),
+                "an untamed cat switches its client copy back to the original body variant"
+        );
+        cat.setTame(true, false);
+        var catRetameData = new ArrayList<>(Optional.ofNullable(cat.getEntityData().packDirty()).orElseThrow());
+        var catRetameFlags = catRetameData.stream()
+                .filter(value -> value.value() instanceof Byte)
+                .findFirst()
+                .orElseThrow();
+        PolymerEntity.get(cat).modifyRawTrackedData(catRetameData, player, false);
+        helper.assertValueEqual(
+                catRetameData.stream().filter(value -> value.id() == catRetameFlags.id()).findFirst().orElseThrow().value(),
+                catRetameFlags.value(),
+                "cat retame packet retains the native flag byte"
+        );
+        helper.assertValueEqual(
+                ((Holder<?>) catRetameData.stream()
+                                .filter(value -> value.id() == CatDataAccessor.dyeDepot$getVariantData().id())
+                                .findFirst()
+                                .orElseThrow()
+                                .value())
+                        .unwrapKey().orElseThrow().identifier(),
+                DDPolymerEntities.collarVariantId(
+                        "cat",
+                        cat.getEntityData().get(CatDataAccessor.dyeDepot$getVariantData()).unwrapKey().orElseThrow(),
+                        incrementalCatColor
+                ),
+                "a retamed cat switches its client copy back to the exact synthetic variant"
+        );
+
+        wolf.setTame(false, false);
+        var wolfUntameData = new ArrayList<>(Optional.ofNullable(wolf.getEntityData().packDirty()).orElseThrow());
+        var wolfUntameFlags = wolfUntameData.stream()
+                .filter(value -> value.value() instanceof Byte)
+                .findFirst()
+                .orElseThrow();
+        helper.assertTrue(((Byte) wolfUntameFlags.value() & 4) == 0, "wolf untame transition clears the native tame bit");
+        PolymerEntity.get(wolf).modifyRawTrackedData(wolfUntameData, player, false);
+        helper.assertValueEqual(
+                wolfUntameData.stream().filter(value -> value.id() == wolfUntameFlags.id()).findFirst().orElseThrow().value(),
+                wolfUntameFlags.value(),
+                "wolf untame packet retains the native flag byte"
+        );
+        helper.assertValueEqual(
+                wolfUntameData.stream()
+                        .filter(value -> value.id() == WolfDataAccessor.dyeDepot$getVariantData().id())
+                        .findFirst()
+                        .orElseThrow()
+                        .value(),
+                wolf.getEntityData().get(WolfDataAccessor.dyeDepot$getVariantData()),
+                "an untamed wolf switches its client copy back to the original body variant"
+        );
+        wolf.setTame(true, false);
+        var wolfRetameData = new ArrayList<>(Optional.ofNullable(wolf.getEntityData().packDirty()).orElseThrow());
+        var wolfRetameFlags = wolfRetameData.stream()
+                .filter(value -> value.value() instanceof Byte)
+                .findFirst()
+                .orElseThrow();
+        PolymerEntity.get(wolf).modifyRawTrackedData(wolfRetameData, player, false);
+        helper.assertValueEqual(
+                wolfRetameData.stream().filter(value -> value.id() == wolfRetameFlags.id()).findFirst().orElseThrow().value(),
+                wolfRetameFlags.value(),
+                "wolf retame packet retains the native flag byte"
+        );
+        helper.assertValueEqual(
+                ((Holder<?>) wolfRetameData.stream()
+                                .filter(value -> value.id() == WolfDataAccessor.dyeDepot$getVariantData().id())
+                                .findFirst()
+                                .orElseThrow()
+                                .value())
+                        .unwrapKey().orElseThrow().identifier(),
+                DDPolymerEntities.collarVariantId(
+                        "wolf",
+                        wolf.getEntityData().get(WolfDataAccessor.dyeDepot$getVariantData()).unwrapKey().orElseThrow(),
+                        incrementalWolfColor
+                ),
+                "a retamed wolf switches its client copy back to the exact synthetic variant"
+        );
+
+        var keyedCatVariant = cat.getEntityData().get(CatDataAccessor.dyeDepot$getVariantData());
+        var directCatVariant = Holder.direct(keyedCatVariant.value());
+        cat.getEntityData().set(CatDataAccessor.dyeDepot$getVariantData(), directCatVariant);
+        var directCatData = new ArrayList<SynchedEntityData.DataValue<?>>();
+        directCatData.add(SynchedEntityData.DataValue.create(
+                CatDataAccessor.dyeDepot$getVariantData(),
+                directCatVariant
+        ));
+        PolymerEntity.get(cat).modifyRawTrackedData(directCatData, player, false);
+        helper.assertValueEqual(
+                directCatData.getFirst().value(),
+                directCatVariant,
+                "an unkeyed third-party cat body passes through instead of crashing"
+        );
+        cat.getEntityData().set(CatDataAccessor.dyeDepot$getVariantData(), keyedCatVariant);
+
+        var keyedWolfVariant = wolf.getEntityData().get(WolfDataAccessor.dyeDepot$getVariantData());
+        var directWolfVariant = Holder.direct(keyedWolfVariant.value());
+        wolf.getEntityData().set(WolfDataAccessor.dyeDepot$getVariantData(), directWolfVariant);
+        var directWolfData = new ArrayList<SynchedEntityData.DataValue<?>>();
+        directWolfData.add(SynchedEntityData.DataValue.create(
+                WolfDataAccessor.dyeDepot$getVariantData(),
+                directWolfVariant
+        ));
+        PolymerEntity.get(wolf).modifyRawTrackedData(directWolfData, player, false);
+        helper.assertValueEqual(
+                directWolfData.getFirst().value(),
+                directWolfVariant,
+                "an unkeyed third-party wolf body passes through instead of crashing"
+        );
+        wolf.getEntityData().set(WolfDataAccessor.dyeDepot$getVariantData(), keyedWolfVariant);
+
+        helper.assertTrue(
+                !DDPolymerCollarPack.supportsVariant("cat", DyeDepot.modLoc("third_party"))
+                        && !DDPolymerCollarPack.supportsVariant("wolf", DyeDepot.modLoc("third_party")),
+                "namespaced third-party variants are never remapped to nonexistent synthetic entries"
+        );
         helper.succeed();
     }
 
