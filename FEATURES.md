@@ -433,7 +433,8 @@ carrier contention cannot prevent the combined server from starting.
   including zero/multiple layers and nested bundle/charged-projectile recovery;
   exact outbound-to-real Polymer item round trips; exact client-only
   banner-base injection and tooltip hiding; real five-to-six Loom creation,
-  exact consumption, and server-side seventh-layer rejection; native
+  client-predicted remote-slot hash correction, exact consumption, and
+  server-side seventh-layer rejection; native
   standing/wall banner carrier and exact-color update-tag behavior; real
   standing/hanging sign dye and glow-ink interactions on both faces; exact sign
   RGB, consumption, and persistence; actual cat/wolf dye interactions for all

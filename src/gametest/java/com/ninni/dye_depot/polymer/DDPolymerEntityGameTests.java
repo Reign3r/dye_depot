@@ -12,6 +12,7 @@ import eu.pb4.polymer.core.api.entity.PolymerEntity;
 import eu.pb4.polymer.core.api.item.PolymerItem;
 import eu.pb4.polymer.core.api.item.PolymerItemUtils;
 import eu.pb4.polymer.core.api.utils.PolymerSyncedObject;
+import eu.pb4.polymer.core.impl.interfaces.GenericPlayerContext;
 import eu.pb4.polymer.virtualentity.api.BlockWithElementHolder;
 import eu.pb4.polymer.virtualentity.api.ElementHolder;
 import eu.pb4.polymer.virtualentity.api.attachment.BlockBoundAttachment;
@@ -37,6 +38,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.Connection;
+import net.minecraft.network.HashedPatchMap;
 import net.minecraft.network.HashedStack;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -46,6 +48,7 @@ import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkPacketData;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.util.ARGB;
+import net.minecraft.util.HashOps;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.feline.Cat;
@@ -803,6 +806,137 @@ public final class DDPolymerEntityGameTests {
                 DyeDepot.modLoc("polymer_base_maroon"),
                 "normal five-pattern item icons retain the exact custom base"
         );
+        loom.removed(player);
+        helper.succeed();
+    }
+
+    @GameTest
+    @SuppressWarnings("removal")
+    public void loomCorrectsClientPredictedSyntheticBaseHashAtFivePatterns(GameTestHelper helper) {
+        var player = helper.makeMockServerPlayerInLevel();
+        var registries = helper.getLevel().registryAccess();
+        var pattern = registries.lookupOrThrow(Registries.BANNER_PATTERN).getOrThrow(BannerPatterns.CROSS);
+        var color = DDDyes.MAROON.get();
+        var builder = new BannerPatternLayers.Builder();
+        for (int index = 0; index < 5; index++) {
+            builder.add(pattern, color);
+        }
+        var authoredPatterns = builder.build();
+        var serverStack = new ItemStack(DDItems.BANNERS.getOrThrow(color));
+        serverStack.set(DataComponents.BANNER_PATTERNS, authoredPatterns);
+
+        var loom = new LoomMenu(18, player.getInventory());
+        loom.getBannerSlot().set(serverStack);
+        int bannerSlotIndex = java.util.stream.IntStream.range(0, loom.slots.size())
+                .filter(index -> loom.getSlot(index) == loom.getBannerSlot())
+                .findFirst()
+                .orElseThrow();
+
+        var playerConnection = ((ServerCommonPacketListenerImplAccessor) player.connection).getConnection();
+        var context = playerConnection.getPacketContext();
+        context.set(PacketContextImpl.REGISTRY_ACCESS, registries);
+        context.set(PacketContextImpl.SERVER_INSTANCE, helper.getLevel().getServer());
+        context.set(PacketContextImpl.GAME_PROFILE, player.getGameProfile());
+        var hashOps = registries.createSerializationContext(HashOps.CRC32C_INSTANCE);
+        HashedPatchMap.HashGenerator hasher = component -> component.encodeValue(hashOps)
+                .getOrThrow(message -> new IllegalArgumentException("Failed to hash " + component + ": " + message))
+                .asInt();
+
+        ItemStack clientPrediction = PolymerItemUtils.getPolymerItemStack(serverStack.copy(), context, registries);
+        var predictedPatterns = clientPrediction.getOrDefault(
+                DataComponents.BANNER_PATTERNS,
+                BannerPatternLayers.EMPTY
+        );
+        helper.assertValueEqual(
+                predictedPatterns.layers().size(),
+                6,
+                "a normal client prediction contains the exact synthetic base plus five authored layers"
+        );
+        helper.assertValueEqual(
+                predictedPatterns.layers().getFirst().pattern().unwrapKey().orElseThrow().identifier(),
+                DyeDepot.modLoc("polymer_base_maroon"),
+                "the predicted sixth visible layer is the synthetic custom-color base"
+        );
+
+        var bannerSlotPacket = new AtomicReference<ClientboundContainerSetSlotPacket>();
+        loom.setSynchronizer(new ContainerSynchronizer() {
+            @Override
+            public void sendInitialData(
+                    AbstractContainerMenu container,
+                    List<ItemStack> slotItems,
+                    ItemStack carried,
+                    int[] dataSlots
+            ) {
+            }
+
+            @Override
+            public void sendSlotChange(AbstractContainerMenu container, int slotIndex, ItemStack itemStack) {
+                if (container.getSlot(slotIndex) == loom.getBannerSlot()) {
+                    bannerSlotPacket.set(new ClientboundContainerSetSlotPacket(
+                            container.containerId,
+                            container.incrementStateId(),
+                            slotIndex,
+                            itemStack
+                    ));
+                }
+            }
+
+            @Override
+            public void sendCarriedChange(AbstractContainerMenu container, ItemStack itemStack) {
+            }
+
+            @Override
+            public void sendDataChange(AbstractContainerMenu container, int id, int value) {
+            }
+
+            @Override
+            public RemoteSlot createSlot() {
+                var remote = new RemoteSlot.Synchronized(hasher);
+                ((GenericPlayerContext) (Object) remote).polymer$setPlayer(player);
+                return remote;
+            }
+        });
+        player.containerMenu = loom;
+        bannerSlotPacket.set(null);
+
+        // A real client predicts the ordinary six-layer Polymer item before
+        // the Loom-specific five-layer correction reaches it. Polymer hashes
+        // the authoritative stack through that same ordinary representation,
+        // so the Loom slot must force a corrective packet despite this hash.
+        loom.setRemoteSlotUnsafe(
+                bannerSlotIndex,
+                HashedStack.create(clientPrediction, hasher)
+        );
+        loom.broadcastChanges();
+
+        ClientboundContainerSetSlotPacket correction = bannerSlotPacket.get();
+        helper.assertTrue(
+                correction != null,
+                "the matching six-visible-layer client hash cannot suppress the Loom slot correction"
+        );
+        var decodedCorrection = encodeClientboundContainerSlot(correction, playerConnection, registries);
+        var correctedPatterns = decodedCorrection.getItem().getOrDefault(
+                DataComponents.BANNER_PATTERNS,
+                BannerPatternLayers.EMPTY
+        );
+        helper.assertValueEqual(
+                correctedPatterns.layers().size(),
+                5,
+                "the corrective Loom packet exposes exactly five authored layers"
+        );
+        helper.assertTrue(
+                correctedPatterns.layers().stream().noneMatch(layer -> layer.pattern().unwrapKey()
+                        .map(key -> key.identifier().getNamespace().equals(DyeDepot.MOD_ID))
+                        .orElse(false)),
+                "the corrective Loom packet omits the synthetic custom-color base"
+        );
+        helper.assertValueEqual(
+                loom.getBannerSlot().getItem().get(DataComponents.BANNER_PATTERNS),
+                authoredPatterns,
+                "remote hash correction does not mutate authoritative banner patterns"
+        );
+
+        player.containerMenu = player.inventoryMenu;
         loom.removed(player);
         helper.succeed();
     }

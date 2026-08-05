@@ -2,17 +2,48 @@ package com.ninni.dye_depot.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
 import com.ninni.dye_depot.polymer.DDPolymerLoomSlotMarker;
 import java.util.List;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerSynchronizer;
 import net.minecraft.world.inventory.LoomMenu;
+import net.minecraft.world.inventory.RemoteSlot;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
 @Mixin(AbstractContainerMenu.class)
 public abstract class AbstractContainerMenuMixin {
+    @WrapOperation(
+            method = "synchronizeSlotToRemote(ILnet/minecraft/world/item/ItemStack;Ljava/util/function/Supplier;)V",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/world/inventory/RemoteSlot;matches(Lnet/minecraft/world/item/ItemStack;)Z"
+            )
+    )
+    private boolean dyeDepot$compareLoomBannerSlotRepresentation(
+            RemoteSlot remoteSlot,
+            ItemStack current,
+            Operation<Boolean> original,
+            @Local(argsOnly = true) int slotIndex
+    ) {
+        AbstractContainerMenu menu = (AbstractContainerMenu) (Object) this;
+        if (menu instanceof LoomMenu loom
+                && slotIndex >= 0
+                && slotIndex < menu.slots.size()
+                && menu.getSlot(slotIndex) == loom.getBannerSlot()) {
+            // The client predicts moves with the inventory representation,
+            // which includes the exact-color synthetic base. Compare against
+            // the Loom-specific view so a five-pattern input is corrected to
+            // five visible layers instead of being mistaken for a match at six.
+            ItemStack comparisonCopy = current.copy();
+            DDPolymerLoomSlotMarker.mark(comparisonCopy, menu.containerId);
+            return original.call(remoteSlot, comparisonCopy);
+        }
+        return original.call(remoteSlot, current);
+    }
+
     @WrapOperation(
             method = "sendAllDataToRemote",
             at = @At(
