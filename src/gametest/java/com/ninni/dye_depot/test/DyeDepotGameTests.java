@@ -4,6 +4,7 @@ import com.google.gson.JsonPrimitive;
 import com.mojang.serialization.JsonOps;
 import com.ninni.dye_depot.DyeDepot;
 import com.ninni.dye_depot.block.DyeBasketBlock;
+import com.ninni.dye_depot.polymer.DDPolymerBlocks;
 import com.ninni.dye_depot.registry.DDBlocks;
 import com.ninni.dye_depot.registry.DDDyes;
 import com.ninni.dye_depot.registry.DDItems;
@@ -50,12 +51,16 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ColorCollection;
 import net.minecraft.world.level.block.DispenserBlock;
+import net.minecraft.world.level.block.GlazedTerracottaBlock;
 import net.minecraft.world.level.block.ShulkerBoxBlock;
 import net.minecraft.world.level.block.StainedGlassBlock;
 import net.minecraft.world.level.block.entity.BlockEntityTypes;
 import net.minecraft.world.level.block.entity.DispenserBlockEntity;
+import net.minecraft.world.level.block.piston.PistonBaseBlock;
+import net.minecraft.world.level.block.piston.PistonStructureResolver;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.level.saveddata.maps.MapBanner;
 
 public final class DyeDepotGameTests {
@@ -204,6 +209,20 @@ public final class DyeDepotGameTests {
                 .bounds()
                 .maxY;
         helper.assertValueEqual(basketHeight, 15.0 / 16.0, "dye basket collision height");
+        helper.succeed();
+    }
+
+    @GameTest
+    public void glazedTerracottaMatchesVanillaPistonResolutionOnServerAndClientCarrier(GameTestHelper helper) {
+        BlockState custom = DDBlocks.GLAZED_TERRACOTTA.getOrThrow(DDDyes.MAROON.get())
+                .defaultBlockState()
+                .setValue(GlazedTerracottaBlock.FACING, Direction.NORTH);
+        BlockState carrier = DDPolymerBlocks.polymerState(custom);
+
+        helper.assertValueEqual(custom.getPistonPushReaction(), PushReaction.PUSH_ONLY, "custom push reaction");
+        helper.assertValueEqual(carrier.getPistonPushReaction(), PushReaction.PUSH_ONLY, "client carrier push reaction");
+        assertGlazedPistonResolution(helper, custom, "authoritative custom block");
+        assertGlazedPistonResolution(helper, carrier, "outbound Polymer carrier");
         helper.succeed();
     }
 
@@ -438,6 +457,94 @@ public final class DyeDepotGameTests {
         return BuiltInRegistries.CREATIVE_MODE_TAB.getValueOrThrow(tabKey).getDisplayItems().stream()
                 .map(ItemStack::getItem)
                 .toList();
+    }
+
+    private static void assertGlazedPistonResolution(
+            GameTestHelper helper,
+            BlockState glazed,
+            String description
+    ) {
+        Direction direction = Direction.EAST;
+        BlockPos piston = new BlockPos(1, 2, 1);
+        BlockPos directTarget = piston.relative(direction);
+        BlockPos pullTarget = piston.relative(direction, 2);
+        BlockPos stickyTarget = directTarget;
+        BlockPos glazedNeighbor = stickyTarget.above();
+        BlockPos movableControl = stickyTarget.below();
+
+        helper.setBlock(
+                piston,
+                Blocks.PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, direction)
+        );
+        helper.setBlock(directTarget, glazed);
+        PistonStructureResolver direct = new PistonStructureResolver(
+                helper.getLevel(),
+                helper.absolutePos(piston),
+                direction,
+                true
+        );
+        helper.assertTrue(direct.resolve(), description + " can be pushed directly");
+        helper.assertTrue(
+                direct.getToPush().contains(helper.absolutePos(directTarget)),
+                description + " is included in a direct push"
+        );
+
+        clearPistonFixture(helper, piston, directTarget, pullTarget, glazedNeighbor, movableControl);
+        helper.setBlock(
+                piston,
+                Blocks.STICKY_PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, direction)
+        );
+        helper.setBlock(pullTarget, glazed);
+        PistonStructureResolver pull = new PistonStructureResolver(
+                helper.getLevel(),
+                helper.absolutePos(piston),
+                direction,
+                false
+        );
+        helper.assertFalse(pull.resolve(), description + " cannot be pulled by a sticky piston");
+        helper.assertFalse(
+                pull.getToPush().contains(helper.absolutePos(pullTarget)),
+                description + " is excluded from sticky retraction"
+        );
+
+        for (Block stickyBlock : List.of(Blocks.SLIME_BLOCK, Blocks.HONEY_BLOCK)) {
+            clearPistonFixture(helper, piston, directTarget, pullTarget, glazedNeighbor, movableControl);
+            helper.setBlock(
+                    piston,
+                    Blocks.PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, direction)
+            );
+            helper.setBlock(stickyTarget, stickyBlock);
+            helper.setBlock(glazedNeighbor, glazed);
+            helper.setBlock(movableControl, Blocks.NOTE_BLOCK);
+
+            PistonStructureResolver lateral = new PistonStructureResolver(
+                    helper.getLevel(),
+                    helper.absolutePos(piston),
+                    direction,
+                    true
+            );
+            helper.assertTrue(lateral.resolve(), description + " " + stickyBlock + " structure resolves");
+            helper.assertTrue(
+                    lateral.getToPush().contains(helper.absolutePos(stickyTarget)),
+                    stickyBlock + " is pushed"
+            );
+            helper.assertTrue(
+                    lateral.getToPush().contains(helper.absolutePos(movableControl)),
+                    "note-block control sticks to " + stickyBlock
+            );
+            helper.assertFalse(
+                    lateral.getToPush().contains(helper.absolutePos(glazedNeighbor)),
+                    description + " does not stick to " + stickyBlock
+            );
+        }
+
+        clearPistonFixture(helper, piston, directTarget, pullTarget, glazedNeighbor, movableControl);
+    }
+
+    private static void clearPistonFixture(GameTestHelper helper, BlockPos... positions) {
+        for (BlockPos pos : positions) {
+            helper.setBlock(pos, Blocks.AIR);
+        }
     }
 
     private static List<Item> modItems(List<Item> items) {

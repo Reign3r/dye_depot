@@ -87,12 +87,15 @@ int dyeDepotScaleClass(float expectedArea) {
     vec2 textureX = dFdx(dyeDepotTexCoord);
     vec2 textureY = dFdy(dyeDepotTexCoord);
     float determinant = textureX.x * textureY.y - textureX.y * textureY.x;
-    if (abs(determinant) < 1.0e-8 || expectedArea <= 0.0) {
+    float textureArea = abs(determinant);
+    float positionArea = length(cross(positionX, positionY));
+    if (!(textureArea > 0.0) || !(positionArea > 0.0) || !(expectedArea > 0.0)) {
         return 0;
     }
-    vec3 positionU = (positionX * textureY.y - positionY * textureX.y) / determinant;
-    vec3 positionV = (-positionX * textureY.x + positionY * textureX.x) / determinant;
-    float renderedScale = sqrt(length(cross(positionU, positionV)) / expectedArea);
+    // Screen-space position and UV areas shrink by the same amount when a
+    // face fills or crosses the near camera plane. Their ratio therefore
+    // retains the encoded entity scale without an absolute derivative cutoff.
+    float renderedScale = sqrt(positionArea / (textureArea * expectedArea));
     int latticeStep = int(floor(log2(max(renderedScale, 1.0e-8)) / DYE_DEPOT_SCALE_STEP + 0.5));
     return ((latticeStep % 5) + 5) % 5;
 }
@@ -155,7 +158,9 @@ void main() {
         bool customUnsheared = residueClass == 1 || residueClass == 2;
         bool baseTexture = sheepTextureKind == 4 || sheepTextureKind == 5;
         bool innerTexture = baseTexture || sheepTextureKind == 3;
-        if (customUnsheared && innerTexture && dyeDepotTextureTag() == 249) {
+        // Keep the exterior snout/lower-leg texels, but never expose their
+        // reverse faces when the camera crosses the native sheep model.
+        if (customUnsheared && innerTexture && (!gl_FrontFacing || dyeDepotTextureTag() == 249)) {
             discard;
         }
         if (residueClass != 0 && !baseTexture) {

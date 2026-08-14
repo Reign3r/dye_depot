@@ -129,16 +129,17 @@ public final class DDPolymerBlocks {
     }
 
     private static void registerGlazed(Block block, DyeColor color) {
-        Map<Direction, BlockState> states = new HashMap<>();
-        BlockState nearest = Blocks.GLAZED_TERRACOTTA.pick(DDPolymerColors.vanillaColor(color)).defaultBlockState();
-        register(block, state -> states.computeIfAbsent(state.getValue(GlazedTerracottaBlock.FACING), direction ->
-                        requestOrFallback(
-                                BlockModelType.FULL_BLOCK,
-                                model(block, yRotation(direction)),
-                                copySharedProperties(state, nearest),
-                                block
-                        )),
-                state -> copySharedProperties(state, nearest));
+        BlockState donor = donorGlazed().defaultBlockState();
+        registerVirtual(block,
+                state -> copySharedProperties(state, donor),
+                state -> copySharedProperties(state, donor),
+                state -> displayStack(block.asItem(), "polymer/" + color.getName() + "_glazed_terracotta"),
+                state -> glazedDisplayYaw(state.getValue(GlazedTerracottaBlock.FACING)),
+                state -> false,
+                state -> List.of(),
+                null,
+                null
+        );
     }
 
     private static void registerBasket(Block block, DyeColor color) {
@@ -178,6 +179,14 @@ public final class DDPolymerBlocks {
                         "polymer/donor_orange_candle_" + state.getValue(CandleBlock.CANDLES)
                                 + (state.getValue(CandleBlock.LIT) ? "_lit" : "")
                 )
+        );
+
+        Block glazed = donorGlazed();
+        registerDisplayOnly(
+                glazed,
+                state -> displayStack(glazed.asItem(), "polymer/donor_orange_glazed_terracotta"),
+                state -> glazedDisplayYaw(state.getValue(GlazedTerracottaBlock.FACING)),
+                null
         );
 
         Block pane = donorPane();
@@ -225,6 +234,10 @@ public final class DDPolymerBlocks {
 
     private static Block donorCandle() {
         return Blocks.DYED_CANDLE.pick(DONOR_COLOR);
+    }
+
+    private static Block donorGlazed() {
+        return Blocks.GLAZED_TERRACOTTA.pick(DONOR_COLOR);
     }
 
     private static Block donorPane() {
@@ -416,6 +429,16 @@ public final class DDPolymerBlocks {
         };
     }
 
+    private static float glazedDisplayYaw(Direction direction) {
+        return switch (direction) {
+            case NORTH -> 0.0f;
+            case EAST -> 270.0f;
+            case SOUTH -> 180.0f;
+            case WEST -> 90.0f;
+            default -> throw new IllegalArgumentException("Not horizontal: " + direction);
+        };
+    }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static BlockState copySharedProperties(BlockState source, BlockState target) {
         for (Property property : source.getProperties()) {
@@ -560,9 +583,14 @@ public final class DDPolymerBlocks {
                 display.setYaw(yaw.apply(state));
             }
             // Opaque full-block carriers make a display at their center sample
-            // zero light. Only shulkers use that carrier; partial displays keep
-            // normal world lighting so candle light transitions stay natural.
-            display.setBrightness(shulkerColor != null ? surroundingBrightness() : null);
+            // zero light. Glazed terracotta and shulkers use surrounding light;
+            // partial displays keep normal world lighting so candle transitions
+            // stay natural.
+            display.setBrightness(
+                    shulkerColor != null || state.getBlock() instanceof GlazedTerracottaBlock
+                            ? surroundingBrightness()
+                            : null
+            );
             if (shulkerLid != null) {
                 shulkerLid.setBrightness(display.getBrightness());
             }

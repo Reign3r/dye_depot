@@ -350,7 +350,7 @@ carrier instead of remapping it a second time to a visible vanilla note block:
 |---|---|
 | wool, terracotta, concrete, concrete powder | exact resource-pack model on a full-block carrier |
 | stained glass | exact translucent model on a non-occluding full-cube carrier, preventing the carrier from culling terrain faces below the glass |
-| glazed terracotta | exact model with state-driven horizontal rotation |
+| glazed terracotta | hidden orange glazed-terracotta donor preserves native `PUSH_ONLY` piston prediction and all four facings; exact state-rotated displays render both custom blocks and the real donor |
 | dye baskets | exact model with state-driven horizontal rotation |
 | carpets | reserved orange-carpet donor carrier with native one-pixel movement/selection collision; the generated pack hides the placed donor model and exact-color displays render both custom carpets and real orange carpets without carrier bleed |
 | candles | reserved orange-candle donor carrier with native count/lit/waterlogged states and collision; the generated pack hides the placed donor models and state-aware displays render both custom candles and real orange candles while native client candle particles avoid duplicates |
@@ -362,7 +362,8 @@ carrier instead of remapping it a second time to a visible vanilla note block:
 | wall banners | nearest-color native wall-banner carriers preserve all four facings, target shape, bar, block entity, and time-varying cloth wave; the same generated first pattern reconstructs every custom base and palette-generated authored masks retain custom colors without a display entity or hidden VINES carrier |
 
 The normal standalone allocation uses nine shared invisible virtual carriers,
-two native brown donor families, and the proven orange carpet/candle donors. It
+two native brown donor families, and the proven orange carpet/candle/glazed-
+terracotta donors. It
 has zero color fallbacks. Exact Polymer model allocation is deliberately
 non-fatal under a combined-mod state-pool shortage: an exhausted model falls
 back to the nearest vanilla color with the same geometry/properties, retains
@@ -382,9 +383,11 @@ carrier contention cannot prevent the combined server from starting.
   copies of the three vanilla sheep wool textures plus the adult and baby base
   textures, and tightly guarded 26.2 `entity.vsh`/`entity.fsh` shaders, replace
   only those donor tints with the exact 75-percent custom sheep RGB. While the
-  outer coat is present, only the enclosed inner-wool/base texels are hidden;
-  the exposed snout and lower legs remain native. Shearing restores the full
-  correctly tinted undercoat.
+  outer coat is present, the enclosed inner-wool/base texels and all reverse
+  inner faces are hidden; the exterior snout and lower legs remain native. The
+  full correctly tinted undercoat returns after shearing. Scale decoding uses
+  the ratio between screen-space model and UV areas, so faces crossing the near
+  camera plane cannot fall through to their vanilla donor color.
   Native geometry and all walking, head/eating, shearing, undercoat,
   invisibility, hurt-overlay, death-roll, and glow/outline behavior therefore
   come from Minecraft's real sheep renderer. The initial experiment leaves
@@ -423,7 +426,8 @@ carrier contention cannot prevent the combined server from starting.
   carriers, non-nestable shulker carriers,
   all 256 textured block overlays and every state mapping, preservation of
   every requested carrier through Polymer's real default mapper,
-  dry/waterlogged carrier geometry and sharing, bed renderer-compensated yaw,
+  dry/waterlogged carrier geometry and sharing, bed and glazed-terracotta
+  renderer-compensated yaw, native glazed-terracotta carrier reaction/facing,
   deterministic fallback accounting, schema-scoped outbound component safety,
   Sky/Ash merge ordering, all-banner special-model JSON, all 16 generated custom
   banner-base registry entries/textures, non-occluding glass,
@@ -451,7 +455,9 @@ carrier contention cannot prevent the combined server from starting.
   RGB, consumption, and persistence; actual cat/wolf dye interactions for all
   16 custom dyes with ownership, negative, consumption, persistence, synthetic
   exact-variant selection, tame-bit preservation, and server-state immutability; shulker lid
-  animation, server collision, and display lighting; candle auto-tick and
+  animation, server collision, and display lighting; vanilla piston resolution
+  for authoritative glazed terracotta and its outbound carrier, including
+  direct push, sticky-pull, and lateral slime/honey cases; candle auto-tick and
   vanilla flame offsets; all 48 unique sheep donor/residue/sheared-state
   combinations,
   logarithmic scale round trips across the legal range, packet-only scale and
@@ -470,7 +476,7 @@ Use the full compatible server mod/dependency set and the
 `26.2_Fabric_Testing` Prism instance with only Polymer, Component Viewer, and
 Fabric API. Copy `_My_Assets/options.txt` into the instance before testing.
 
-- [ ] Start through Gradle `runServer`; confirm `Done`, successful Polymer pack
+- [ ] Start through the standalone `runServer` Fabric launcher; confirm `Done`, successful Polymer pack
   generation, no duplicate top-level JARs, registry/mixin/model errors, or
   relevant warnings. Connect to `localhost`, accept the pack, and confirm no
   missing textures, raw keys, or disconnects. Sky/Ash names and overridden dye
@@ -482,8 +488,10 @@ Fabric API. Copy `_My_Assets/options.txt` into the instance before testing.
 - [ ] Place, rotate, break, and recover representative custom full blocks,
   glazed terracotta, baskets, carpets, panes, candles, beds, shulkers, and both
   banner forms. Check drops and nearby vanilla controls; inspect all four bed
-  facings and both halves. Carpet selection and movement collision must match a
-  vanilla carpet rather than string or a pressure plate.
+  facings and both halves. Directly push custom glazed terracotta, then verify a
+  sticky piston cannot pull it and adjacent slime/honey does not drag or ghost-
+  move it. Carpet selection and movement collision must match a vanilla carpet
+  rather than string or a pressure plate.
 - [ ] Connect panes in several masks and waterlog panes/candles. Pane posts and
   arms must remain centered on the carrier outline. Water must be visible and
   behave normally; dry controls must stay dry. Place glass over opaque terrain

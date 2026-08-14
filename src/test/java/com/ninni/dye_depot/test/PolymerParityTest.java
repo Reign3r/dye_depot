@@ -94,6 +94,7 @@ import net.minecraft.world.level.block.BannerBlock;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.GlazedTerracottaBlock;
 import net.minecraft.world.level.block.WallBannerBlock;
 import net.minecraft.world.level.block.entity.BannerPattern;
 import net.minecraft.world.level.block.entity.BannerPatterns;
@@ -102,6 +103,7 @@ import net.minecraft.world.level.block.entity.BlockEntityTypes;
 import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.level.saveddata.maps.MapDecorationType;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -367,6 +369,29 @@ class PolymerParityTest {
     }
 
     @Test
+    void glazedTerracottaUsesTheNativePistonSafeCarrierForEveryFacing() {
+        Block donor = Blocks.GLAZED_TERRACOTTA.pick(DyeColor.ORANGE);
+
+        DDBlocks.GLAZED_TERRACOTTA.values().forEach(block ->
+                block.getStateDefinition().getPossibleStates().forEach(state -> {
+                    var carrier = DDPolymerBlocks.polymerState(state);
+                    assertEquals(PushReaction.PUSH_ONLY, state.getPistonPushReaction(), state.toString());
+                    assertInstanceOf(GlazedTerracottaBlock.class, carrier.getBlock(), state.toString());
+                    assertSame(donor, carrier.getBlock(), state.toString());
+                    assertEquals(PushReaction.PUSH_ONLY, carrier.getPistonPushReaction(), state.toString());
+                    assertEquals(
+                            state.getValue(GlazedTerracottaBlock.FACING),
+                            carrier.getValue(GlazedTerracottaBlock.FACING),
+                            state.toString()
+                    );
+                    assertNotNull(BlockWithElementHolder.get(state), state.toString());
+                })
+        );
+
+        assertNotNull(BlockWithElementHolder.get(donor.defaultBlockState()));
+    }
+
+    @Test
     void virtualBlocksUseSharedTargetableGeometryCarriersWithoutPoolFallbacks() {
         assertEquals(9, DDPolymerBlocks.virtualCarrierCount());
         assertEquals(0, DDPolymerBlocks.cosmeticFallbackCount());
@@ -457,6 +482,33 @@ class PolymerParityTest {
                 );
                 holder.destroy();
             }
+        }
+    }
+
+    @Test
+    void glazedTerracottaDisplayYawMatchesAuthoredModelsAfterVanillaRendererCompensation() {
+        Map<Direction, Float> authoredRotations = Map.of(
+                Direction.NORTH, 180.0f,
+                Direction.EAST, 270.0f,
+                Direction.SOUTH, 0.0f,
+                Direction.WEST, 90.0f
+        );
+        Block glazed = DDBlocks.GLAZED_TERRACOTTA.getOrThrow(DDDyes.MAROON.get());
+
+        for (var entry : authoredRotations.entrySet()) {
+            var state = glazed.defaultBlockState().setValue(GlazedTerracottaBlock.FACING, entry.getKey());
+            var overlay = BlockWithElementHolder.get(state);
+            assertNotNull(overlay);
+            var holder = overlay.createElementHolder(null, BlockPos.ZERO, state);
+            var display = assertInstanceOf(ItemDisplayElement.class, holder.getElements().getFirst());
+
+            assertEquals(
+                    normalizeDegrees(entry.getValue()),
+                    normalizeDegrees(180.0f - display.getYaw()),
+                    0.001f,
+                    state.toString()
+            );
+            holder.destroy();
         }
     }
 
@@ -833,6 +885,27 @@ class PolymerParityTest {
     }
 
     @Test
+    void sheepShaderScaleClassSurvivesNearCameraDerivatives() {
+        float expectedArea = 8.0f;
+        float[] screenDerivatives = {1.0f, 1.0e-3f, 1.0e-5f, 1.0e-10f, 1.0e-18f};
+        for (int expectedClass = 0; expectedClass < 5; expectedClass++) {
+            float encodedScale = (float) Math.pow(2.0, expectedClass / 128.0);
+            for (float derivative : screenDerivatives) {
+                float textureArea = derivative * derivative;
+                float positionArea = 4.0f * encodedScale * derivative
+                        * 2.0f * encodedScale * derivative;
+                float renderedScale = (float) Math.sqrt(positionArea / (textureArea * expectedArea));
+                int latticeStep = (int) Math.floor(Math.log(renderedScale) / Math.log(2.0) * 128.0 + 0.5);
+                assertEquals(
+                        expectedClass,
+                        Math.floorMod(latticeStep, 5),
+                        "scale residue at screen derivative " + derivative
+                );
+            }
+        }
+    }
+
+    @Test
     void generatedPackContainsSafeBannerDefinitionsAndEveryVirtualModel() throws Exception {
         assertTrue(PolymerResourcePackUtils.isRequired());
         Path output = temporaryDirectory.resolve("dye-depot-polymer.zip");
@@ -861,6 +934,19 @@ class PolymerParityTest {
             for (int count = 1; count <= 4; count++) {
                 assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/donor_orange_candle_" + count + ".json"));
                 assertNotNull(zip.getEntry("assets/dye_depot/items/polymer/donor_orange_candle_" + count + "_lit.json"));
+            }
+            JsonObject donorGlazed = JsonParser.parseString(read(zip, "assets/minecraft/blockstates/orange_glazed_terracotta.json"))
+                    .getAsJsonObject();
+            assertEquals(4, donorGlazed.getAsJsonObject("variants").size());
+            donorGlazed.getAsJsonObject("variants").entrySet().forEach(entry ->
+                    assertEquals(donorEmpty, entry.getValue().getAsJsonObject().get("model").getAsString(), entry.getKey())
+            );
+            assertTrue(read(zip, "assets/dye_depot/items/polymer/donor_orange_glazed_terracotta.json")
+                    .contains("minecraft:block/orange_glazed_terracotta"));
+            for (DDDyes color : DDDyes.values()) {
+                assertNotNull(zip.getEntry(
+                        "assets/dye_depot/items/polymer/" + color.getName() + "_glazed_terracotta.json"
+                ));
             }
             assertEquals(0, JsonParser.parseString(read(zip, "assets/minecraft/blockstates/brown_stained_glass_pane.json"))
                     .getAsJsonObject().getAsJsonArray("multipart").size());
@@ -1002,10 +1088,20 @@ class PolymerParityTest {
             for (String transport : List.of(
                     "dyeDepotPosition", "dyeDepotRawColor", "dFdx", "dFdy", "log2",
                     "DYE_DEPOT_MARKER", "dyeDepotCustomColor", "customUnsheared",
-                    "dyeDepotTextureTag() == 249", "latticeStep % 5"
+                    "if (customUnsheared && innerTexture && (!gl_FrontFacing || dyeDepotTextureTag() == 249))",
+                    "float positionArea = length(cross(positionX, positionY))",
+                    "float renderedScale = sqrt(positionArea / (textureArea * expectedArea))",
+                    "latticeStep % 5"
             )) {
                 assertTrue(vertexShader.contains(transport) || fragmentShader.contains(transport), transport);
             }
+            assertFalse(
+                    fragmentShader.contains("abs(determinant) < 1.0e-8"),
+                    "near-camera sheep faces must not fall back to their vanilla donor because of an absolute UV-area cutoff"
+            );
+            assertFalse(fragmentShader.contains("positionU"), "scale decoding must not invert the near-zero UV Jacobian");
+            assertFalse(fragmentShader.contains("positionV"), "scale decoding must not invert the near-zero UV Jacobian");
+            assertFalse(fragmentShader.contains("/ determinant"), "scale decoding must use the stable area ratio");
 
             Map<String, Integer> nativeSheepTextureTypes = Map.of(
                     "sheep_wool", 0x00010201,

@@ -81,6 +81,7 @@ final class DDPolymerPack {
             addPatternedBannerDefinition(builder, "polymer/" + color + "_banner_patterned", safeColor, "ground");
             addPatternedBannerDefinition(builder, color + "_banner", safeColor, "ground");
             addItemDefinition(builder, "polymer/" + color + "_carpet", "dye_depot:block/" + color + "_carpet");
+            addItemDefinition(builder, "polymer/" + color + "_glazed_terracotta", "dye_depot:block/" + color + "_glazed_terracotta");
             addItemDefinition(builder, "polymer/" + color + "_bed_head", "dye_depot:block/" + color + "_bed_head");
             addItemDefinition(builder, "polymer/" + color + "_bed_foot", "dye_depot:block/" + color + "_bed_foot");
             addItemDefinition(builder, "polymer/" + color + "_candle_cake", "dye_depot:block/" + color + "_candle_cake");
@@ -327,6 +328,16 @@ final class DDPolymerPack {
                 "{\"variants\":{" + candleVariants + "}}"
         );
 
+        builder.addStringData(
+                "assets/minecraft/blockstates/orange_glazed_terracotta.json",
+                "{\"variants\":{" + hiddenHorizontalVariants(emptyModel) + "}}"
+        );
+        addItemDefinition(
+                builder,
+                "polymer/donor_orange_glazed_terracotta",
+                "minecraft:block/orange_glazed_terracotta"
+        );
+
         builder.addStringData("assets/minecraft/blockstates/brown_stained_glass_pane.json", "{\"multipart\":[]}");
         for (String model : new String[]{"post", "side", "side_alt", "noside", "noside_alt"}) {
             builder.addStringData(
@@ -375,6 +386,13 @@ final class DDPolymerPack {
         } catch (IOException exception) {
             throw new IllegalStateException("Could not generate transparent donor texture", exception);
         }
+    }
+
+    private static String hiddenHorizontalVariants(String model) {
+        return "\"facing=north\":{\"model\":\"" + model + "\"},"
+                + "\"facing=east\":{\"model\":\"" + model + "\"},"
+                + "\"facing=south\":{\"model\":\"" + model + "\"},"
+                + "\"facing=west\":{\"model\":\"" + model + "\"}";
     }
 
     private static byte[] tintedBannerPatternTexture(DyeColor color) {

@@ -75,7 +75,7 @@ public class DDBlocks {
     );
 
     public static final DyedHolders<Block, Block> GLAZED_TERRACOTTA = DyedHolders.createModded(dye ->
-            registerWithItem(dye + "_glazed_terracotta", GlazedTerracottaBlock::new, () -> Properties.ofFullCopy(Blocks.GLAZED_TERRACOTTA.pick(DyeColor.WHITE)).mapColor(dye))
+            registerWithItem(dye + "_glazed_terracotta", GlazedTerracottaBlock::new, () -> Properties.ofFullCopy(Blocks.GLAZED_TERRACOTTA.pick(DyeColor.WHITE)).mapColor(dye).pushReaction(PushReaction.PUSH_ONLY))
     );
 
     public static final DyedHolders<Block, Block> STAINED_GLASS = DyedHolders.createModded(dye ->
