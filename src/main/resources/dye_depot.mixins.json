@@ -20,6 +20,7 @@
     "SheepDataAccessor",
     "VillagerGoalPackagesMixin",
     "NearestBedSensorMixin",
+    "PistonBaseBlockMixin",
     "WolfDataAccessor"
   ],
   "injectors": {

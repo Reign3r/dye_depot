@@ -1,6 +1,7 @@
 package com.ninni.dye_depot.test;
 
 import com.google.gson.JsonPrimitive;
+import com.mojang.authlib.GameProfile;
 import com.mojang.serialization.JsonOps;
 import com.ninni.dye_depot.DyeDepot;
 import com.ninni.dye_depot.block.DyeBasketBlock;
@@ -11,16 +12,24 @@ import com.ninni.dye_depot.registry.DDItems;
 import com.ninni.dye_depot.registry.DDMapDecorationType;
 import com.ninni.dye_depot.registry.DDPoiTypes;
 import com.ninni.dye_depot.registry.DDTags;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.embedded.EmbeddedChannel;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.fabricmc.fabric.api.networking.v1.context.PacketContext;
+import net.fabricmc.fabric.impl.networking.context.PacketContextImpl;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.dispenser.BlockSource;
 import net.minecraft.core.dispenser.DispenseItemBehavior;
@@ -28,7 +37,17 @@ import net.minecraft.core.dispenser.ShulkerBoxDispenseBehavior;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.Connection;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.game.ClientboundBlockEventPacket;
+import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
+import net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.TagKey;
 import net.minecraft.tags.VillagerTradeTags;
@@ -62,6 +81,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.level.saveddata.maps.MapBanner;
+import net.minecraft.world.phys.Vec3;
 
 public final class DyeDepotGameTests {
     private static final int CUSTOM_COLOR_COUNT = 16;
@@ -224,6 +244,94 @@ public final class DyeDepotGameTests {
         assertGlazedPistonResolution(helper, custom, "authoritative custom block");
         assertGlazedPistonResolution(helper, carrier, "outbound Polymer carrier");
         helper.succeed();
+    }
+
+    @GameTest(maxTicks = 40)
+    public void stickyPistonResendsAnUnchangedGlazedSourceAfterItsBlockEvent(GameTestHelper helper) {
+        Direction direction = Direction.EAST;
+        BlockPos piston = new BlockPos(2, 2, 2);
+        BlockPos power = piston.relative(direction.getOpposite());
+        BlockPos initialTarget = piston.relative(direction);
+        BlockPos extendedTarget = piston.relative(direction, 2);
+        BlockState custom = DDBlocks.GLAZED_TERRACOTTA.getOrThrow(DDDyes.MAROON.get())
+                .defaultBlockState()
+                .setValue(GlazedTerracottaBlock.FACING, Direction.NORTH);
+        RecordingConnection connection = makeRecordingConnection(helper, helper.absolutePos(piston));
+
+        helper.setBlock(power, Blocks.REDSTONE_BLOCK);
+        helper.setBlock(initialTarget, custom);
+        helper.setBlock(
+                piston,
+                Blocks.STICKY_PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, direction)
+        );
+
+        helper.runAfterDelay(5, () -> {
+            helper.assertValueEqual(helper.getBlockState(extendedTarget), custom, "direct push reaches the extended position");
+            helper.assertTrue(helper.getBlockState(piston).getValue(PistonBaseBlock.EXTENDED), "sticky piston extended");
+            connection.clearPackets();
+
+            helper.setBlock(power, Blocks.AIR);
+            helper.runAfterDelay(4, () -> {
+                BlockPos absolutePiston = helper.absolutePos(piston);
+                BlockPos absoluteSource = helper.absolutePos(extendedTarget);
+                List<Packet<?>> packets = connection.packets();
+                int eventIndex = -1;
+                int correctionIndex = -1;
+                Packet<?> correction = null;
+
+                for (int index = 0; index < packets.size(); index++) {
+                    Packet<?> packet = packets.get(index);
+                    if (eventIndex < 0
+                            && packet instanceof ClientboundBlockEventPacket blockEvent
+                            && blockEvent.getPos().equals(absolutePiston)
+                            && blockEvent.getBlock() == Blocks.STICKY_PISTON
+                            && blockEvent.getB0() == PistonBaseBlock.TRIGGER_CONTRACT) {
+                        eventIndex = index;
+                    } else if (eventIndex >= 0
+                            && packetStateAt(packet, absoluteSource) != null) {
+                        correctionIndex = index;
+                        correction = packet;
+                        break;
+                    }
+                }
+
+                helper.assertTrue(eventIndex >= 0, "sticky contraction emits its client block event");
+                helper.assertTrue(
+                        correctionIndex > eventIndex,
+                        "the unchanged glazed source is corrected after client piston prediction"
+                );
+                if (correction == null) {
+                    helper.fail("missing unchanged glazed-source correction packet");
+                    return;
+                }
+
+                helper.assertValueEqual(helper.getBlockState(extendedTarget), custom, "sticky retraction leaves glazed terracotta in place");
+                helper.assertBlockPresent(Blocks.AIR, initialTarget);
+
+                BlockState outbound = roundTripClientboundState(
+                        correction,
+                        connection,
+                        helper.getLevel().registryAccess(),
+                        absoluteSource
+                );
+                helper.assertValueEqual(
+                        outbound.getBlock(),
+                        Blocks.GLAZED_TERRACOTTA.pick(DyeColor.ORANGE),
+                        "correction packet uses the hidden native glazed carrier"
+                );
+                helper.assertValueEqual(
+                        outbound.getValue(GlazedTerracottaBlock.FACING),
+                        custom.getValue(GlazedTerracottaBlock.FACING),
+                        "correction packet preserves glazed facing"
+                );
+                helper.assertValueEqual(
+                        outbound.getPistonPushReaction(),
+                        PushReaction.PUSH_ONLY,
+                        "correction packet preserves vanilla glazed piston semantics"
+                );
+                helper.succeed();
+            });
+        });
     }
 
     @GameTest
@@ -544,6 +652,100 @@ public final class DyeDepotGameTests {
     private static void clearPistonFixture(GameTestHelper helper, BlockPos... positions) {
         for (BlockPos pos : positions) {
             helper.setBlock(pos, Blocks.AIR);
+        }
+    }
+
+    private static RecordingConnection makeRecordingConnection(GameTestHelper helper, BlockPos position) {
+        UUID id = UUID.randomUUID();
+        GameProfile profile = new GameProfile(id, "glaze-" + id.toString().substring(0, 8));
+        CommonListenerCookie cookie = CommonListenerCookie.createInitial(profile, false);
+        ServerPlayer player = new ServerPlayer(
+                helper.getLevel().getServer(),
+                helper.getLevel(),
+                profile,
+                cookie.clientInformation()
+        );
+        Vec3 center = Vec3.atCenterOf(position);
+        player.setPos(center.x, center.y, center.z);
+
+        RecordingConnection connection = new RecordingConnection();
+        new EmbeddedChannel(connection);
+        PacketContext context = connection.getPacketContext();
+        context.set(PacketContextImpl.REGISTRY_ACCESS, helper.getLevel().registryAccess());
+        context.set(PacketContextImpl.SERVER_INSTANCE, helper.getLevel().getServer());
+        context.set(PacketContextImpl.GAME_PROFILE, profile);
+        helper.getLevel().getServer().getPlayerList().placeNewPlayer(connection, player, cookie);
+        return connection;
+    }
+
+    private static BlockState packetStateAt(Packet<?> packet, BlockPos target) {
+        if (packet instanceof ClientboundBlockUpdatePacket update) {
+            return update.getPos().equals(target) ? update.getBlockState() : null;
+        }
+        if (packet instanceof ClientboundSectionBlocksUpdatePacket sectionUpdate) {
+            AtomicReference<BlockState> result = new AtomicReference<>();
+            sectionUpdate.runUpdates((pos, state) -> {
+                if (pos.equals(target)) {
+                    result.set(state);
+                }
+            });
+            return result.get();
+        }
+        return null;
+    }
+
+    private static BlockState roundTripClientboundState(
+            Packet<?> packet,
+            Connection connection,
+            RegistryAccess registries,
+            BlockPos target
+    ) {
+        if (packet instanceof ClientboundBlockUpdatePacket update) {
+            RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), registries);
+            try {
+                PacketContext.supplyWithContext(connection, () -> {
+                    ClientboundBlockUpdatePacket.STREAM_CODEC.encode(buffer, update);
+                    return null;
+                });
+                return packetStateAt(ClientboundBlockUpdatePacket.STREAM_CODEC.decode(buffer), target);
+            } finally {
+                buffer.release();
+            }
+        }
+        if (packet instanceof ClientboundSectionBlocksUpdatePacket sectionUpdate) {
+            FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
+            try {
+                PacketContext.supplyWithContext(connection, () -> {
+                    ClientboundSectionBlocksUpdatePacket.STREAM_CODEC.encode(buffer, sectionUpdate);
+                    return null;
+                });
+                return packetStateAt(ClientboundSectionBlocksUpdatePacket.STREAM_CODEC.decode(buffer), target);
+            } finally {
+                buffer.release();
+            }
+        }
+        throw new IllegalArgumentException("unsupported correction packet: " + packet.type());
+    }
+
+    private static final class RecordingConnection extends Connection {
+        private final List<Packet<?>> sentPackets = new ArrayList<>();
+
+        private RecordingConnection() {
+            super(PacketFlow.SERVERBOUND);
+        }
+
+        @Override
+        public synchronized void send(Packet<?> packet, ChannelFutureListener listener, boolean flush) {
+            this.sentPackets.add(packet);
+            super.send(packet, listener, flush);
+        }
+
+        private synchronized void clearPackets() {
+            this.sentPackets.clear();
+        }
+
+        private synchronized List<Packet<?>> packets() {
+            return List.copyOf(this.sentPackets);
         }
     }
 

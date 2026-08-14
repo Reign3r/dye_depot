@@ -350,7 +350,7 @@ carrier instead of remapping it a second time to a visible vanilla note block:
 |---|---|
 | wool, terracotta, concrete, concrete powder | exact resource-pack model on a full-block carrier |
 | stained glass | exact translucent model on a non-occluding full-cube carrier, preventing the carrier from culling terrain faces below the glass |
-| glazed terracotta | hidden orange glazed-terracotta donor preserves native `PUSH_ONLY` piston prediction and all four facings; exact state-rotated displays render both custom blocks and the real donor |
+| glazed terracotta | hidden orange glazed-terracotta donor preserves native `PUSH_ONLY` piston prediction and all four facings; exact state-rotated displays render both custom blocks and the real donor; a next-tick unchanged-state correction heals remote sticky-retraction prediction |
 | dye baskets | exact model with state-driven horizontal rotation |
 | carpets | reserved orange-carpet donor carrier with native one-pixel movement/selection collision; the generated pack hides the placed donor model and exact-color displays render both custom carpets and real orange carpets without carrier bleed |
 | candles | reserved orange-candle donor carrier with native count/lit/waterlogged states and collision; the generated pack hides the placed donor models and state-aware displays render both custom candles and real orange candles while native client candle particles avoid duplicates |
@@ -457,7 +457,8 @@ carrier contention cannot prevent the combined server from starting.
   exact-variant selection, tame-bit preservation, and server-state immutability; shulker lid
   animation, server collision, and display lighting; vanilla piston resolution
   for authoritative glazed terracotta and its outbound carrier, including
-  direct push, sticky-pull, and lateral slime/honey cases; candle auto-tick and
+  direct push, sticky-pull, and lateral slime/honey cases, plus real
+  block-event-before-correction packet ordering for sticky retraction; candle auto-tick and
   vanilla flame offsets; all 48 unique sheep donor/residue/sheared-state
   combinations,
   logarithmic scale round trips across the legal range, packet-only scale and
